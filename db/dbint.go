@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"database/sql"
 	"database/sql/driver"
+	"github.com/s0ulw1sh/soulgost/utils"
 )
 
 type I32Null struct {
@@ -15,7 +16,9 @@ func (n *I32Null) MarshalJSON() ([]byte, error) {
 	if !n.Valid {
 		return []byte("null"), nil
 	}
-	return json.Marshal(n.Int32)
+	var out [20]byte
+	w := utils.IntToBStr(out[:], int64(n.Int32))
+	return out[w:], nil
 }
 
 func (n *I32Null) UnmarshalJSON(b []byte) error {
@@ -45,7 +48,9 @@ func (n *I64Null) MarshalJSON() ([]byte, error) {
 	if !n.Valid {
 		return []byte("null"), nil
 	}
-	return json.Marshal(n.Int64)
+	var out [20]byte
+	w := utils.IntToBStr(out[:], n.Int64)
+	return out[w:], nil
 }
 
 func (n *I64Null) UnmarshalJSON(b []byte) error {
@@ -68,16 +73,16 @@ func (n *I64Null) Val() int64 {
 }
 
 type I8Zero struct {
-	Var int8
+	Int8 int8
 }
 
 func (n I8Zero) Value() (driver.Value, error) {
-	return int64(n.Var), nil
+	return int64(n.Int8), nil
 }
 
 func (n *I8Zero) Scan(value interface{}) error {
 	if value == nil {
-		n.Var = 0
+		n.Int8 = 0
 		return nil
 	}
 
@@ -90,7 +95,7 @@ func (n *I8Zero) Scan(value interface{}) error {
 			return err
 		}
 
-		n.Var = int8(i64)
+		n.Int8 = int8(i64)
 	case string:
 		str := string(value.(string))
 		i64, err := strconv.ParseInt(str, 10, 8)
@@ -99,15 +104,15 @@ func (n *I8Zero) Scan(value interface{}) error {
 			return err
 		}
 
-		n.Var = int8(i64)
-	case int8:   n.Var = int8(value.(int8))
-	case int16:  n.Var = int8(value.(int16))
-	case int32:  n.Var = int8(value.(int32))
-	case int64:  n.Var = int8(value.(int64))
-	case uint8:  n.Var = int8(value.(uint8))
-	case uint16: n.Var = int8(value.(uint16))
-	case uint32: n.Var = int8(value.(uint32))
-	case uint64: n.Var = int8(value.(uint64))
+		n.Int8 = int8(i64)
+	case int8:   n.Int8 = int8(value.(int8))
+	case int16:  n.Int8 = int8(value.(int16))
+	case int32:  n.Int8 = int8(value.(int32))
+	case int64:  n.Int8 = int8(value.(int64))
+	case uint8:  n.Int8 = int8(value.(uint8))
+	case uint16: n.Int8 = int8(value.(uint16))
+	case uint32: n.Int8 = int8(value.(uint32))
+	case uint64: n.Int8 = int8(value.(uint64))
 	default:
 		return ErrInvalidType
 	}
@@ -116,22 +121,22 @@ func (n *I8Zero) Scan(value interface{}) error {
 }
 
 func (n *I8Zero) MarshalJSON() ([]byte, error) {
-	return json.Marshal(n.Var)
+	return json.Marshal(n.Int8)
 }
 
 func (n *I8Zero) UnmarshalJSON(b []byte) (err error) {
-	if err = json.Unmarshal(b, &n.Var); err != nil {
-		n.Var = 0
+	if err = json.Unmarshal(b, &n.Int8); err != nil {
+		n.Int8 = 0
 	}
 	return
 }
 
 func (n *I8Zero) Set(val int8) {
-	n.Var = val
+	n.Int8 = val
 }
 
 func (n *I8Zero) Val() int8 {
-	return n.Var
+	return n.Int8
 }
 
 type I16Zero struct {

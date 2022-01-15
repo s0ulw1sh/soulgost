@@ -2,7 +2,7 @@ package utils
 
 func IntToBStr(buf []byte, v int64) int {
 	w := len(buf)
-	m := v < 0
+	m := v >> 63
 
 	if v == 0 {
 		w--
@@ -10,17 +10,13 @@ func IntToBStr(buf []byte, v int64) int {
 		return w
 	}
 
-	if m {
-		v *= -1
-	}
-
-	for v > 0 {
+	for v != 0 {
 		w--
-		buf[w] = byte(v%10) + '0'
+		buf[w] = byte((v%10 ^ m) - m) + '0'
 		v /= 10
 	}
 
-	if m {
+	if m < 0 {
 		w--
 		buf[w] = '-'
 	}
