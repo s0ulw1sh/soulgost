@@ -28,7 +28,7 @@ type Expr struct {
 	Value string
 }
 
-func (self *Query) Table(ta ...string) *Query {
+func (self *Query) Table(tables ...string) *Query {
 	return self
 }
 
@@ -52,7 +52,7 @@ func (self *Query) Insert(fields []Field) *Query {
 	return self
 }
 
-func (self *Query) Delete(conds []Condition) *Query {
+func (self *Query) Delete(conds ...[]Condition) *Query {
 	return self
 }
 

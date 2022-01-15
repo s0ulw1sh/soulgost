@@ -1,4 +1,4 @@
-package db
+package gen
 
 import (
 	"strings"
@@ -46,7 +46,7 @@ type genQuery struct {
 	tables []tableItem
 	args int
 	fields []qfiled
-	conds  []Condition
+	conds  []qcondition
 	limit  string
 	offset string
 }
@@ -61,6 +61,12 @@ type qfiled struct {
 	name  string
 	value string
 	ftype int
+}
+
+type qcondition struct {
+	name  string
+	cnd   string
+	value interface{}
 }
 
 func Generate(filename string, filedata string) (string, error) {
@@ -121,19 +127,25 @@ func Generate(filename string, filedata string) (string, error) {
 }
 
 func (v *Generator) Visit(node ast.Node) (w ast.Visitor) {
-	if v.inspectNode(node) {
+	if v.inspectExpr(node) {
 		return v
 	} 
 
 	return nil
 }
 
-func (v *Generator) inspectNode(node ast.Node) bool {
+func (v *Generator) inspectExpr(node ast.Node) bool {
 	res := true
 
 	switch n := node.(type) {
-	case *ast.ExprStmt:
-		res = v.visitExpr(n.X)
+
+	case *ast.CallExpr:
+
+		for _, a := range n.Args {
+			v.inspectExpr(a)
+		}
+
+		res = v.visitExpr(n)
 
 		if !res {
 			v.items[v.counter].pos = n.Pos()-1
@@ -142,66 +154,32 @@ func (v *Generator) inspectNode(node ast.Node) bool {
 			v.counter += 1
 		}
 
+	case *ast.ExprStmt:
+		return v.inspectExpr(n.X)
+
+	case *ast.AssignStmt:
+		if len(n.Rhs) == 1 {
+			return v.inspectExpr(n.Rhs[0])
+		}
+
+	case *ast.IfStmt:
+
+		v.inspectExpr(n.Init)
+
+		if b, ok := n.Cond.(*ast.BinaryExpr); ok {
+			v.inspectExpr(b.X)
+		}
+
+		return false
+
+	case *ast.ReturnStmt:
+		for _, a := range n.Results {
+			res = v.inspectExpr(a)
+		}
+
 	case *ast.BlockStmt:
-
 		for _, l := range n.List {
-
-			if s, ok := l.(*ast.AssignStmt); ok && len(s.Rhs) == 1 {
-				for _, rhs := range s.Rhs {
-					res = v.visitExpr(rhs)
-
-					if !res {
-						v.items[v.counter].pos = rhs.Pos()-1
-						v.items[v.counter].end = rhs.End()-1
-
-						v.counter += 1
-					}
-
-				}
-			}
-
-			if c, okif := l.(*ast.IfStmt); okif {
-				if b, okbe := c.Cond.(*ast.BinaryExpr); okbe {
-					res = v.visitExpr(b.X)
-
-					if !res {
-						v.items[v.counter].pos = b.X.Pos()-1
-						v.items[v.counter].end = b.X.End()-1
-
-						v.counter += 1
-					}
-				}
-			}
-
-			if x, ok := l.(*ast.ExprStmt); ok {
-				if cx, ok := x.X.(*ast.CallExpr); ok {
-
-					res = v.visitExpr(cx)
-
-					if !res {
-						v.items[v.counter].pos = cx.Pos()-1
-						v.items[v.counter].end = cx.End()-1
-
-						v.counter += 1
-					}
-				}
-			}
-
-			if r, ok := l.(*ast.ReturnStmt); ok {
-				for _, a := range r.Results {
-					if callex, ok := a.(*ast.CallExpr); ok {
-						res = v.visitExpr(callex)
-
-							if !res {
-								v.items[v.counter].pos = callex.Pos()-1
-								v.items[v.counter].end = callex.End()-1
-
-								v.counter += 1
-							}
-					}
-				}
-			}
-
+			res = v.inspectExpr(l)
 		}
 	}
 
@@ -337,7 +315,7 @@ func (v *Generator) visitExpr(expr ast.Expr) bool {
 								if i == 0 {
 									if l, ok := a.(*ast.BasicLit); ok && l.Kind == token.STRING {
 										fldname = l.Value[1:len(l.Value)-1]
-										v.items[v.counter].fields = append(v.items[v.counter].fields, qfiled{fldname, "COUNT("+fldname+")", field_mode_expr})
+										v.items[v.counter].fields = append(v.items[v.counter].fields, qfiled{fldname, "COUNT(`"+fldname+"`)", field_mode_expr})
 									}
 								}
 
@@ -346,8 +324,6 @@ func (v *Generator) visitExpr(expr ast.Expr) bool {
 									v.items[v.counter].fields = append(v.items[v.counter].fields, qfiled{fldname, valname, field_mode_scan})
 								}
 							}
-
-							
 						}
 
 					case "Where":
@@ -475,7 +451,7 @@ func (v *Generator) parseConds(cl *ast.CompositeLit) bool {
 
 						if z == 2 {
 							valname = v.data[m.Pos()-1:m.End()-1]
-							v.items[v.counter].conds = append(v.items[v.counter].conds, Condition{fldname, condexp, valname})
+							v.items[v.counter].conds = append(v.items[v.counter].conds, qcondition{fldname, condexp, valname})
 						}
 					}
 				}
@@ -603,7 +579,7 @@ func (v *Generator) generateQueryConds(item *genQuery) string {
 	var out []string
 
 	for _, cond := range item.conds {
-		cnd := "`" + cond.Name + "`" + cond.Cnd + "?"
+		cnd := "`" + cond.name + "`" + cond.cnd + "?"
 		out = append(out, cnd)
 	}
 
@@ -622,7 +598,7 @@ func (v *Generator) generateQueryVars(item *genQuery) string {
 	}
 
 	for _, cond := range item.conds {
-		out = append(out, cond.Value.(string))
+		out = append(out, cond.value.(string))
 	}
 
 	if item.limit != "" {

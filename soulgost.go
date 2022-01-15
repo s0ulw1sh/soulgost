@@ -10,7 +10,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
-	"github.com/s0ulw1sh/soulgost/db"
+	"github.com/s0ulw1sh/soulgost/db/gen"
 )
 
 var (
@@ -66,7 +66,7 @@ func runGenerators(file_path string) {
 		if dbgen {
 			log.Println("processing db", file_path)
 			
-			data, err = db.Generate(filepath.Base(file_path), data)
+			data, err = gen.Generate(filepath.Base(file_path), data)
 			
 			if err != nil {
 				log.Fatal(err)
