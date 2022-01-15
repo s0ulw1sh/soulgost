@@ -1,24 +1,32 @@
 package utils
 
-/*func fmtFrac(buf []byte, v uint64, prec int) (nw int, nv uint64) {
-	// Omit trailing zeros up to and including decimal point.
+func IntToBStr(buf []byte, v int64) int {
 	w := len(buf)
-	print := false
-	for i := 0; i < prec; i++ {
-		digit := v % 10
-		print = print || digit != 0
-		if print {
-			w--
-			buf[w] = byte(digit) + '0'
-		}
+	m := v < 0
+
+	if v == 0 {
+		w--
+		buf[w] = '0'
+		return w
+	}
+
+	if m {
+		v *= -1
+	}
+
+	for v > 0 {
+		w--
+		buf[w] = byte(v%10) + '0'
 		v /= 10
 	}
-	if print {
+
+	if m {
 		w--
-		buf[w] = '.'
+		buf[w] = '-'
 	}
-	return w, v
-}*/
+	
+	return w
+}
 
 func UintToBStr(buf []byte, v uint64) int {
 	w := len(buf)
