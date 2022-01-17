@@ -1,72 +1,121 @@
 package gen
 
 import (
+	//"fmt"
+	"os"
+	"strings"
 	"strconv"
 	"go/ast"
 	"go/token"
+
+	"github.com/s0ulw1sh/soulgost/utils"
 )
 
 type dbGenerator struct {
-	structs []*ast.StructType
+	structs []dbstruct
 }
 
+type field struct {
+	pk     bool
+	ai     bool
+	nn     bool
+	name   string
+	goname string
+	gotype string
+}
 
-// from src/reflect/type.go
-func (self *dbGenerator) tagLookup(tag, key string) (value string, ok bool) {
-	// When modifying this code, also update the validateStructTag code
-	// in cmd/vet/structtag.go.
+type dbstruct struct {
+	name    string
+	table   string
+	stype   *ast.StructType
+	fcount  int
+	pkcount int
+	fields  []field
+}
 
-	for tag != "" {
-		// Skip leading space.
-		i := 0
-		for i < len(tag) && tag[i] == ' ' {
-			i++
-		}
-		tag = tag[i:]
-		if tag == "" {
-			break
+func (self *dbstruct) prepare() bool {
+	var (
+		tag string
+		tags []string
+		ok bool
+	)
+
+	self.fcount = 0
+
+	for _, f := range self.stype.Fields.List {
+		if f.Tag == nil { continue }
+		if tag, ok = utils.TagLookup(f.Tag.Value, "sg"); !ok { continue }
+
+		tags = strings.Split(tag, ",")
+
+		if len(tags) == 0 { return false }
+
+		newfld := field{
+			name:   tags[0],
+			goname: f.Names[0].Name,
 		}
 
-		// Scan to colon. A space, a quote or a control character is a syntax error.
-		// Strictly speaking, control chars include the range [0x7f, 0x9f], not just
-		// [0x00, 0x1f], but in practice, we ignore the multi-byte control characters
-		// as it is simpler to inspect the tag's bytes than the tag's runes.
-		i = 0
-		for i < len(tag) && tag[i] > ' ' && tag[i] != ':' && tag[i] != '"' && tag[i] != 0x7f {
-			i++
-		}
-		if i == 0 || i+1 >= len(tag) || tag[i] != ':' || tag[i+1] != '"' {
-			break
-		}
-		name := string(tag[:i])
-		tag = tag[i+1:]
-
-		// Scan quoted string to find value.
-		i = 1
-		for i < len(tag) && tag[i] != '"' {
-			if tag[i] == '\\' {
-				i++
+		for _, tag := range tags[1:] {
+			switch tag {
+			case "ai": newfld.ai = true
+			case "nn": newfld.nn = true
+			case "pk":
+				newfld.pk = true
+				self.pkcount += 1
 			}
-			i++
 		}
-		if i >= len(tag) {
-			break
-		}
-		qvalue := string(tag[:i+1])
-		tag = tag[i+1:]
 
-		if key == name {
-			value, err := strconv.Unquote(qvalue)
-			if err != nil {
-				break
+		switch t := f.Type.(type) {
+		case *ast.SelectorExpr:
+			if tx, ok := t.X.(*ast.Ident); ok {
+				newfld.gotype = tx.Name + "." + t.Sel.Name
+			} else {
+				return false
 			}
-			return value, true
+		case *ast.Ident:
+			newfld.gotype = t.Name
+		default:
+			return false
+		}
+
+		self.fields = append(self.fields, newfld)
+		self.fcount += 1
+	}
+
+	return self.fcount != 0
+}
+
+func (self *dbGenerator) getTableName(root *ast.File, typename string) string {
+	var (
+		fd *ast.FuncDecl
+		se *ast.StarExpr
+		id *ast.Ident
+		rs *ast.ReturnStmt
+		bl *ast.BasicLit
+		ok bool
+	)
+
+	for _, d := range root.Decls {
+		if fd, ok = d.(*ast.FuncDecl); !ok || fd.Recv == nil || len(fd.Recv.List) != 1 { continue }
+		if se, ok = fd.Recv.List[0].Type.(*ast.StarExpr); !ok { continue }
+		if id, ok = se.X.(*ast.Ident); !ok || id.Name != typename { continue }
+		if fd.Name.Name != "TableName" { continue }
+
+		for _, stmt := range fd.Body.List {
+			if rs, ok = stmt.(*ast.ReturnStmt); !ok && len(rs.Results) != 1 { continue }
+			if bl, ok = rs.Results[0].(*ast.BasicLit); !ok && bl.Kind != token.STRING { continue }
+
+			value, err := strconv.Unquote(bl.Value)
+			if err == nil {
+				return value
+			} 
 		}
 	}
-	return "", false
+
+	return strings.ToLower(typename)
 }
 
-func (self *dbGenerator) checkType(decl *ast.GenDecl) bool {
+func (self *dbGenerator) checkType(root *ast.File, decl *ast.GenDecl) bool {
 	var (
 		ts  *ast.TypeSpec
 		st  *ast.StructType
@@ -75,23 +124,22 @@ func (self *dbGenerator) checkType(decl *ast.GenDecl) bool {
 	)
 
 	for _, spec := range decl.Specs {
-		if ts, ok = spec.(*ast.TypeSpec); !ok {
-			continue
-		}
-
-		if st, ok = ts.Type.(*ast.StructType); !ok {
-			continue
-		}
+		if ts, ok = spec.(*ast.TypeSpec); !ok { continue }
+		if st, ok = ts.Type.(*ast.StructType); !ok { continue }
 
 		for _, f := range st.Fields.List {
 			if f.Tag == nil {
 				continue
 			}
 
-			_, ok := self.tagLookup(f.Tag.Value, "sg")
+			if _, ok := utils.TagLookup(f.Tag.Value, "sg"); ok {
 
-			if ok {
-				self.structs = append(self.structs, st)
+				self.structs = append(self.structs, dbstruct{
+					name:  ts.Name.Name,
+					table: self.getTableName(root, ts.Name.Name),
+					stype: st,
+				})
+
 				ret = true
 				break
 			}
@@ -106,7 +154,7 @@ func (self *dbGenerator) checkDecls(root *ast.File) bool {
 
 	for _, d := range root.Decls {
 		if gd, ok := d.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
-			if self.checkType(gd) {
+			if self.checkType(root, gd) {
 				ret = true
 			}
 		}
@@ -115,11 +163,51 @@ func (self *dbGenerator) checkDecls(root *ast.File) bool {
 	return ret
 }
 
-func Generate(root *ast.File, fdir string, fname string) {
+func (self *dbGenerator) genStructFnCount(f *os.File, s *dbstruct) {
+	if s.pkcount == 0 {
+		f.WriteString("//WARNING!!!\n")
+		f.WriteString("//`GetCount` not defined because not defined PK fields\n\n")
+		return
+	}
+	f.WriteString("func (self *" + s.name + ") GetCount(dbx *sql.DB) (c int, err error) {\n\t")
+	f.WriteString("err = dbx.QueryRow(\"SELECT COUNT(*) FROM `" + s.table + "`\").Scan(&c)\n")
+	f.WriteString("\treturn\n")
+	f.WriteString("}\n\n")
+}
+
+func (self *dbGenerator) genStructFnLoad(f *os.File, s *dbstruct) {
+	var (
+		idsarr []string
+		selarr []string
+		scnarr []string
+	)
+
+	//TODO: *
+
+	f.WriteString("func (self *" + s.name + ") LoadById(dbx *sql.DB ...) error {\n\t")
+}
+
+func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
+	if !s.prepare() { return }
+
+	self.genStructFnCount(f, s)
+}
+
+func Generate(root *ast.File, f *os.File) bool {
 	gen := dbGenerator{}
 
 	if !gen.checkDecls(root) {
-		return
+		return false
 	}
 
+	f.WriteString("package " + root.Name.Name + "\n\n")
+	f.WriteString("//-soulgost\n")
+	f.WriteString("//Code generated by \"soulgost -modes=db\"; DO NOT EDIT!\n\n")
+	f.WriteString("import \"database/sql\"\n\n")
+
+	for _, s := range gen.structs {
+		gen.genStruct(f, &s)
+	}
+
+	return true
 }
