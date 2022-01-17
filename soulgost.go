@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"io"
 	"fmt"
 	"log"
 	"flag"
@@ -42,9 +43,23 @@ func (self *appSoulgost) flagParse() {
 	args := flag.Args()
 
 	if len(args) == 0 {
-		self.argPath = "."
+		wd, err := os.Getwd()
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		self.argPath = wd
 	} else {
-		self.argPath = args[0]
+		self.argPath = filepath.Clean(args[0])
+
+		abs, err := filepath.Abs(self.argPath)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		self.argPath = abs
 	}
 
 	list := strings.Split(*modes, ",")
@@ -64,16 +79,34 @@ func (self *appSoulgost) isDir(name string) bool {
 	return info.IsDir()
 }
 
-func (self *appSoulgost) readFile(file_path string) ([]byte, error) {
-	return os.ReadFile(file_path)
-}
-
-func (self *appSoulgost) processFile(file_path string) {
-	data, err := self.readFile(file_path)
-
+func (self *appSoulgost) readFile(file_path string) []byte {
+	data, err := os.ReadFile(file_path)
+	
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	return data
+}
+
+func (self *appSoulgost) moveFile(src, dest string) error {
+	i, err := os.Open(src)
+    if err != nil {
+        return err
+    }
+    o, err := os.Create(dest)
+    if err != nil {
+        i.Close()
+        return err
+    }
+    defer o.Close()
+    _, err = io.Copy(o, i)
+    i.Close()
+    return err
+}
+
+func (self *appSoulgost) processFile(file_path string) {
+	data := self.readFile(file_path)
 
 	astf, err := parser.ParseFile(self.fset, file_path, data, parser.ParseComments)
 
@@ -94,7 +127,20 @@ func (self *appSoulgost) processFile(file_path string) {
 	fname := strings.TrimSuffix(filepath.Base(file_path), ".go")
 
 	if self.dbGen {
-		gen.Generate(astf, fdir, fname)
+		f, err := os.CreateTemp("", "soulgost-db")
+		defer os.Remove(f.Name())
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if gen.Generate(astf, f) {
+			err = self.moveFile(f.Name(), filepath.Join(fdir, fname + "_sgdb.go"))
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
 	}
 }
 
