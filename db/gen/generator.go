@@ -17,20 +17,30 @@ type dbGenerator struct {
 
 type field struct {
 	pk     bool
+	fk     bool
 	ai     bool
 	nn     bool
+	pg     bool
+	xx     bool
+	xw     bool
 	name   string
 	goname string
 	gotype string
 }
 
 type dbstruct struct {
-	name    string
-	table   string
-	stype   *ast.StructType
-	fcount  int
-	pkcount int
-	fields  []field
+	name     string
+	table    string
+	stype    *ast.StructType
+	fcount   int
+	pkcount  int
+	fields   []field
+
+	dbcount   bool
+	dbload    bool
+	dbinsert  bool
+	dbupdate  bool
+	dbremove  bool
 }
 
 func (self *dbstruct) prepare() bool {
@@ -62,6 +72,10 @@ func (self *dbstruct) prepare() bool {
 			case "pk":
 				newfld.pk = true
 				self.pkcount += 1
+			case "fk": newfld.fk = true
+			case "xx": newfld.xx = true
+			case "xw": newfld.xw = true
+			case "pg": newfld.pg = true
 			}
 		}
 
@@ -115,6 +129,34 @@ func (self *dbGenerator) getTableName(root *ast.File, typename string) string {
 	return strings.ToLower(typename)
 }
 
+func (self *dbGenerator) hasFuncs(root *ast.File, s *dbstruct) bool {
+	var (
+		fd *ast.FuncDecl
+		se *ast.StarExpr
+		id *ast.Ident
+		ok bool
+		cnt int = 0
+	)
+	for _, d := range root.Decls {
+		if fd, ok = d.(*ast.FuncDecl); !ok || fd.Recv == nil || len(fd.Recv.List) != 1 { continue }
+		if se, ok = fd.Recv.List[0].Type.(*ast.StarExpr); !ok { continue }
+		if id, ok = se.X.(*ast.Ident); !ok || id.Name != s.name { continue }
+
+		switch fd.Name.Name {
+		case "DbLoad":    s.dbload    = true
+		case "DbInsert":  s.dbinsert  = true
+		case "DbUpdate":  s.dbupdate  = true
+		case "DbRemove":  s.dbremove  = true
+		default:
+			continue
+		}
+
+		cnt += 1
+	}
+
+	return cnt == 7
+}
+
 func (self *dbGenerator) checkType(root *ast.File, decl *ast.GenDecl) bool {
 	var (
 		ts  *ast.TypeSpec
@@ -163,34 +205,331 @@ func (self *dbGenerator) checkDecls(root *ast.File) bool {
 	return ret
 }
 
-func (self *dbGenerator) genStructFnCount(f *os.File, s *dbstruct) {
-	if s.pkcount == 0 {
-		f.WriteString("//WARNING!!!\n")
-		f.WriteString("//`GetCount` not defined because not defined PK fields\n\n")
-		return
+
+func (self *dbGenerator) genPaginations(fw *os.File, s *dbstruct) {
+	var (
+		pgarr []string
+		pgcnt string
+		pgnmn string
+	)
+
+	pgcnt = strings.ToLower(s.name)+"_pagi_max"
+	pgnmn = s.name + "DbPagi"
+
+	fw.WriteString("const " + pgcnt + " = 30\n\n")
+
+	for _, f := range s.fields {
+		if f.pg {
+			pgarr = append(pgarr, f.goname + " " + f.gotype + " `json:\""+f.name+",omitempty\"`")
+		}
 	}
-	f.WriteString("func (self *" + s.name + ") GetCount(dbx *sql.DB) (c int, err error) {\n\t")
-	f.WriteString("err = dbx.QueryRow(\"SELECT COUNT(*) FROM `" + s.table + "`\").Scan(&c)\n")
-	f.WriteString("\treturn\n")
-	f.WriteString("}\n\n")
+
+	fw.WriteString("type " + pgnmn + " struct {\n\t")
+	fw.WriteString(strings.Join(pgarr, "\n\t") + "\n\t")
+	fw.WriteString("Count int `json:\"count,omitempty\"`\n\t")
+	fw.WriteString("Max   int `json:\"max,omitempty\"`\n\t")
+	fw.WriteString("Page  int `json:\"page,omitempty\"`\n\t")
+	fw.WriteString("Pages int `json:\"pages,omitempty\"`\n")
+	fw.WriteString("}\n\n")
+	
+	fw.WriteString(`func (self *`+pgnmn+`) Limit() int {
+	if self.Max == 0 {
+		return `+pgcnt+`
+	} else {
+		return self.Max
+	}
+}` + "\n\n")
+
+fw.WriteString(`func (self *`+pgnmn+`) Offset() int {
+	p := self.Page
+	if p > 0 { p = p - 1 }
+	return self.Limit() * p
+}` + "\n\n")
+
+fw.WriteString(`func (self *`+pgnmn+`) MarshalJSON() ([]byte, error) {
+	return json.Marshal(self)
+}` + "\n\n")
+
 }
 
-func (self *dbGenerator) genStructFnLoad(f *os.File, s *dbstruct) {
+func (self *dbGenerator) genSubStructs(fw *os.File, s *dbstruct) {
+	fw.WriteString("type " + s.name + "DbList struct {\n\t")
+	fw.WriteString("List []" + s.name + " `json:\"list\"`\n\t")
+	fw.WriteString("Pagi "+s.name+"DbPagi `json:\"pagi\"`\n")
+	fw.WriteString("}\n\n")
+}
+
+func (self *dbGenerator) genFnDbCount(fw *os.File, s *dbstruct) {
+	fw.WriteString("func "+s.name+"DbCount(dbx *sql.DB) (c int, err error) {\n\t")
+	if s.pkcount == 0 {
+		fw.WriteString("err = dbx.QueryRow(\"SELECT COUNT(*) FROM `" + s.table + "`\").Scan(&c)\n")
+	} else {
+		for _, f := range s.fields {
+			if f.pk {
+				fw.WriteString("err = dbx.QueryRow(\"SELECT COUNT(`"+f.name+"`) FROM `" + s.table + "`\").Scan(&c)\n")
+				break
+			}
+		}
+	}
+	fw.WriteString("\treturn\n")
+	fw.WriteString("}\n\n")
+}
+
+func (self *dbGenerator) genFnDbCountPk(fw *os.File, s *dbstruct) {
+
+	var (
+		idsarr []string
+		whrarr []string
+		whsarr []string
+		pkname string
+	)
+
+	for _, f := range s.fields {
+		if f.pk {
+			if len(pkname) == 0 {
+				pkname = "`" + f.name + "`"
+			}
+			idsarr = append(idsarr, f.name + "_v " + f.gotype)
+			whrarr = append(whrarr, "`" + f.name + "`=?")
+			whsarr = append(whsarr, f.name + "_v")
+		}
+	}
+
+	if len(idsarr) > 0 {
+		fw.WriteString("func "+s.name+"DbCountByPk(dbx *sql.DB, "+strings.Join(idsarr, ",")+") (c int, err error) {\n\t")
+		fw.WriteString("err = dbx.QueryRow(\"SELECT COUNT("+pkname+") FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+"\", "+strings.Join(whsarr, ",")+").Scan(&c)\n")
+		fw.WriteString("\treturn\n")
+		fw.WriteString("}\n\n")
+	}
+}
+
+func (self *dbGenerator) genFnDbLoad(fw *os.File, s *dbstruct) {
 	var (
 		idsarr []string
 		selarr []string
 		scnarr []string
+		whrarr []string
+		whsarr []string
 	)
 
-	//TODO: *
+	for _, f := range s.fields {
+		if f.xx { continue }
 
-	f.WriteString("func (self *" + s.name + ") LoadById(dbx *sql.DB ...) error {\n\t")
+		if f.pk {
+			idsarr = append(idsarr, f.name + "_v " + f.gotype)
+			whrarr = append(whrarr, "`" + f.name + "`=?")
+			whsarr = append(whsarr, f.name + "_v")
+		}
+		selarr = append(selarr, "`" + f.name + "`")
+		scnarr = append(scnarr, "&self." + f.goname)
+	}
+
+	fw.WriteString("func (self *" + s.name + ") DbLoad(dbx *sql.DB, "+strings.Join(idsarr, ", ")+") error {\n\t")
+	fw.WriteString("return dbx.QueryRow(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+"\", "+strings.Join(whsarr, ", ")+").Scan("+strings.Join(scnarr, ", ")+")\n")
+	fw.WriteString("}\n\n")
+}
+
+func (self *dbGenerator) genFnDbInsert(fw *os.File, s *dbstruct) {
+
+	var (
+		fldarr []string
+		qsarr  []string
+		vsarr  []string
+	)
+
+	for _, f := range s.fields {
+		if f.xw { continue }
+
+		if !f.ai {
+			fldarr = append(fldarr, "`" + f.name + "`")
+			qsarr  = append(qsarr, "?")
+			vsarr  = append(vsarr, "self." + f.goname)
+		}
+	}
+
+	fw.WriteString("func (self *" + s.name + ") DbInsert(dbx *sql.DB) (int64, error) {\n\t")
+	fw.WriteString("res, err := dbx.Exec(\"INSERT `"+s.table+"` ("+strings.Join(fldarr, ",")+") ("+strings.Join(qsarr, ",")+")\", "+strings.Join(vsarr, ",")+")\n\t")
+	fw.WriteString("if err != nil {\n\t\t")
+	fw.WriteString("return 0, err\n\t")
+	fw.WriteString("}\n\t")
+	fw.WriteString("return res.LastInsertId()\n")
+	fw.WriteString("}\n\n")
+}
+
+func (self *dbGenerator) genFnDbUpdate(fw *os.File, s *dbstruct) {
+	var (
+		fldarr []string
+		vsarr  []string
+		pkarr  []string
+		wharr  []string
+	)
+
+	for _, f := range s.fields {
+		if f.xx || f.xw { continue }
+
+		if !f.ai && !f.pk {
+			fldarr = append(fldarr, "`" + f.name + "`=?")
+			vsarr  = append(vsarr, "self." + f.goname)
+		}
+		if f.pk {
+			pkarr  = append(pkarr, "`" + f.name + "`=?")
+			wharr  = append(wharr, "self." + f.goname)
+		}
+	}
+
+	fw.WriteString("func (self *" + s.name + ") DbUpdate(dbx *sql.DB) (int64, error) {\n\t")
+	fw.WriteString("res, err := dbx.Exec(\"UPDATE `"+s.table+"` SET "+strings.Join(fldarr, ",")+" WHERE "+strings.Join(pkarr, " AND ")+"\", "+strings.Join(vsarr, ",")+", "+strings.Join(wharr, ",")+")\n\t")
+	fw.WriteString("if err != nil {\n\t\t")
+	fw.WriteString("return 0, err\n\t")
+	fw.WriteString("}\n\t")
+	fw.WriteString("return res.RowsAffected()\n")
+	fw.WriteString("}\n\n")
+}
+
+func (self *dbGenerator) genFnDbRemove(fw *os.File, s *dbstruct) {
+	var (
+		pkarr  []string
+		wharr  []string
+	)
+
+	for _, f := range s.fields {
+		if f.pk {
+			pkarr  = append(pkarr, "`" + f.name + "`=?")
+			wharr  = append(wharr, "self." + f.goname)
+		}
+	}
+
+	fw.WriteString("func (self *" + s.name + ") DbRemove(dbx *sql.DB) (int64, error) {\n\t")
+	fw.WriteString("res, err := dbx.Exec(\"DELETE FROM `"+s.table+"` WHERE "+strings.Join(pkarr, " AND ")+"\", "+strings.Join(wharr, ",")+")\n\t")
+	fw.WriteString("if err != nil {\n\t\t")
+	fw.WriteString("return 0, err\n\t")
+	fw.WriteString("}\n\t")
+	fw.WriteString("return res.RowsAffected()\n")
+	fw.WriteString("}\n\n")
+}
+
+func (self *dbGenerator) genFnDbList(fw *os.File, s *dbstruct) {
+	var (
+		selarr []string
+		scnarr []string
+		whrarr []string
+		whsarr []string
+		pksarr string = "*"
+	)
+
+	for _, f := range s.fields {
+		if f.xx { continue }
+
+		if f.pk && len(pksarr) == 1 {
+			pksarr = "`" + f.name + "`"
+		}
+
+		if f.pg {
+			whrarr = append(whrarr, "`" + f.name + "`=?")
+			whsarr = append(whsarr, "pagi_v." + f.goname)
+		}
+		
+
+		selarr = append(selarr, "`" + f.name + "`")
+		scnarr = append(scnarr, "&s." + f.goname)
+	}
+
+	fw.WriteString("func "+s.name+"DbList(dbx *sql.DB, pagi_v *"+s.name+"DbPagi, list_v *"+s.name+"DbList) error {\n\t")
+
+	fw.WriteString("var s " + s.name + "\n\t")
+	fw.WriteString("list_v.Pagi = *pagi_v\n\t")
+	if len(whrarr) > 0 {
+		fw.WriteString("err := dbx.QueryRow(\"SELECT COUNT("+pksarr+") FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+"\", "+strings.Join(whsarr, ", ")+").Scan(&list_v.Pagi.Count)\n\t")
+		fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
+		fw.WriteString("rows, err := dbx.Query(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+" OFFSET ? LIMIT ?\", "+strings.Join(whsarr, ", ")+", pagi_v.Offset(), pagi_v.Limit())\n\t")
+	} else {
+		fw.WriteString("err := dbx.QueryRow(\"SELECT COUNT("+pksarr+") FROM `\").Scan(&list_v.Pagi.Count)\n\t")
+		fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
+		fw.WriteString("rows, err := dbx.Query(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` OFFSET ? LIMIT ?\", pagi_v.Offset(), pagi_v.Limit())\n\t")
+	}
+
+	fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
+	fw.WriteString("defer rows.Close()\n\t")
+	fw.WriteString("list_v.List = make([]"+s.name+", 0)\n\t")
+	fw.WriteString("for rows.Next() {\n\t\t")
+	fw.WriteString("if err = rows.Scan("+strings.Join(scnarr, ",")+"); err != nil {\n\t\t\treturn err\n\t\t}\n\t\t")
+	fw.WriteString("list_v.List = append(list_v.List, s)\n\t")
+	fw.WriteString("}\n\t")
+	fw.WriteString("return nil\n")
+	fw.WriteString("}\n\n")
+}
+
+func (self *dbGenerator) genFnDbAll(fw *os.File, s *dbstruct) {
+	var (
+		selarr []string
+		scnarr []string
+		whrarr []string
+		whsarr []string
+		pksarr string = "*"
+	)
+
+	for _, f := range s.fields {
+		if f.xx { continue }
+
+		if f.pk && len(pksarr) == 1 {
+			pksarr = "`" + f.name + "`"
+		}
+
+		if f.pg {
+			whrarr = append(whrarr, "`" + f.name + "`=?")
+			whsarr = append(whsarr, "pagi_v." + f.goname)
+		}
+		
+
+		selarr = append(selarr, "`" + f.name + "`")
+		scnarr = append(scnarr, "&s." + f.goname)
+	}
+
+	fw.WriteString("func "+s.name+"DbAll(dbx *sql.DB, list_v []"+s.name+") error {\n\t")
+
+	fw.WriteString("var s " + s.name + "\n\t")
+
+	fw.WriteString("rows, err := dbx.Query(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "`\")\n\t")
+
+	fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
+	fw.WriteString("defer rows.Close()\n\t")
+	fw.WriteString("for rows.Next() {\n\t\t")
+	fw.WriteString("if err = rows.Scan("+strings.Join(scnarr, ",")+"); err != nil {\n\t\t\treturn err\n\t\t}\n\t\t")
+	fw.WriteString("list_v = append(list_v, s)\n\t")
+	fw.WriteString("}\n\t")
+	fw.WriteString("return nil\n")
+	fw.WriteString("}\n\n")
 }
 
 func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
+	
 	if !s.prepare() { return }
 
-	self.genStructFnCount(f, s)
+	self.genPaginations(f, s)
+	self.genSubStructs(f, s)
+
+	
+	self.genFnDbCount(f, s)
+	self.genFnDbCountPk(f, s)
+
+	if !s.dbload {
+		self.genFnDbLoad(f, s)
+	}
+
+	if !s.dbinsert {
+		self.genFnDbInsert(f, s)
+	}
+
+	if !s.dbupdate {
+		self.genFnDbUpdate(f, s)
+	}
+
+	if !s.dbremove {
+		self.genFnDbRemove(f, s)
+	}
+
+	self.genFnDbList(f, s)
+	self.genFnDbAll(f, s)
 }
 
 func Generate(root *ast.File, f *os.File) bool {
@@ -201,11 +540,18 @@ func Generate(root *ast.File, f *os.File) bool {
 	}
 
 	f.WriteString("package " + root.Name.Name + "\n\n")
-	f.WriteString("//-soulgost\n")
-	f.WriteString("//Code generated by \"soulgost -modes=db\"; DO NOT EDIT!\n\n")
-	f.WriteString("import \"database/sql\"\n\n")
+	f.WriteString("//-soulgost\n\n")
+	f.WriteString("// WARNING!!! \n")
+	f.WriteString("// Code generated by \"soulgost -modes=db\"; DO NOT EDIT!\n")
+	f.WriteString("// URL - https://github.com/s0ulw1sh/soulgost\n")
+	f.WriteString("// by Pavel Rid aka s0ulw1sh\n\n")
+	f.WriteString("import (\n")
+	f.WriteString("\t\"database/sql\"\n")
+	f.WriteString("\t\"encoding/json\"\n")
+	f.WriteString(")\n\n")
 
 	for _, s := range gen.structs {
+		if gen.hasFuncs(root, &s) { continue }
 		gen.genStruct(f, &s)
 	}
 
