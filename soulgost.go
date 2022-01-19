@@ -12,11 +12,13 @@ import (
 	"go/token"
 	"go/parser"
 
-	"github.com/s0ulw1sh/soulgost/db/gen"
+	db_gen  "github.com/s0ulw1sh/soulgost/db/gen"
+	cli_gen "github.com/s0ulw1sh/soulgost/cli/gen"
 )
 
 type appSoulgost struct {
 	dbGen    bool
+	cliGen   bool
 	argPath  string
 	fset     *token.FileSet
 }
@@ -65,8 +67,9 @@ func (self *appSoulgost) flagParse() {
 	list := strings.Split(*modes, ",")
 
 	for _, m := range list {
-		if strings.ToLower(m) == "db" {
-			self.dbGen = true
+		switch strings.ToLower(m) {
+		case "db":  self.dbGen  = true
+		case "cli": self.cliGen = true
 		}
 	}
 }
@@ -134,13 +137,28 @@ func (self *appSoulgost) processFile(file_path string) {
 			log.Fatal(err)
 		}
 
-		if gen.Generate(astf, f) {
+		if db_gen.Generate(astf, f) {
 			err = self.moveFile(f.Name(), filepath.Join(fdir, fname + "_sgdb.go"))
 			if err != nil {
 				log.Fatal(err)
 			}
 		}
+	}
 
+	if self.cliGen {
+		f, err := os.CreateTemp("", "soulgost-cli")
+		defer os.Remove(f.Name())
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if cli_gen.Generate(astf, f) {
+			err = self.moveFile(f.Name(), filepath.Join(fdir, fname + "_sgcli.go"))
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
 	}
 }
 
