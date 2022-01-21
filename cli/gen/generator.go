@@ -43,6 +43,16 @@ func (self *clifuncs) call_name() string {
 	return self.typename + "CliCmd_" + self.command
 }
 
+func (self *clifuncs) example_cmd() string {
+	example := self.command
+
+	for _, p := range self.params {
+		example += " "+p.name+":<"+p.gotype+">"
+	}
+
+	return example
+}
+
 type cliparams struct {
 	name   string
 	gotype string
@@ -164,32 +174,31 @@ func (self *cliGenerator) genCliCallerFunc(fw *os.File, t *clitype, fn *clifuncs
 	}
 
 	fw.WriteString(fmt.Sprintf("if len(s_args) != %d {\n\t\t", len(fn.params)))
-	fw.WriteString("fmt.Println(`Error: incorrect number of parameters`)\n\t\t")
-	fw.WriteString("fmt.Println(`Example: "+fn.command)
-	for _, p := range fn.params {
-		fw.WriteString(" "+p.name+":<"+p.gotype+">")
-	}
-	fw.WriteString("`)\n\t}\n\t")
+	fw.WriteString("fmt.Println(\"Error: incorrect number of parameters\")\n\t\t")
+	fw.WriteString("fmt.Println(\"Example: "+fn.example_cmd() + "\")\n\t}\n\t")
 
 	for i, p := range fn.params {
+		if p.gotype == "string" { continue }
+
 		switch p.gotype {
 		case "int8", "int16", "int32", "int64":
 			parr = append(parr, fmt.Sprintf(p.gotype+"(p%d)", i+1))
 			fw.WriteString(fmt.Sprintf("p%d, err = strconv.ParseInt(s_args[%d], 10, %s)\n\t", i+1, i, strings.TrimPrefix(p.gotype, "int")))
-			fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
 		case "uint8", "uint16", "uint32", "uint64":
 			parr = append(parr, fmt.Sprintf(p.gotype+"(p%d)", i+1))
 			fw.WriteString(fmt.Sprintf("p%d, err = strconv.ParseUint(s_args[%d], 10, %s)\n\t", i+1, i, strings.TrimPrefix(p.gotype, "uint")))
-			fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
 		case "float32", "float64":
 			parr = append(parr, fmt.Sprintf(p.gotype+"(p%d)", i+1))
 			fw.WriteString(fmt.Sprintf("p%d, err = strconv.ParseFloat(s_args[%d], %s)\n\t", i+1, i, strings.TrimPrefix(p.gotype, "float")))
-			fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
 		case "bool":
 			parr = append(parr, fmt.Sprintf("p%d", i+1))
 			fw.WriteString(fmt.Sprintf("p%d, err = strconv.ParseBool(s_args[%d])\n\t", i+1, i))
-			fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
 		}
+		fw.WriteString("if err != nil {\n\t\t")
+		fw.WriteString("fmt.Println(\"Error:\", err)\n\t\t")
+		fw.WriteString("fmt.Println(\"Example: "+fn.example_cmd() + "\")\n\t\t")
+		fw.WriteString("return err\n\t")
+		fw.WriteString("}\n\t")
 	}
 
 	fw.WriteString("return " + t.call_var() + "." + fn.name + "("+strings.Join(parr, ", ")+")\n")
