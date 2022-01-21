@@ -119,6 +119,18 @@ func (self *cliGenerator) genCliTop(fw *os.File, t *clitype) {
 
 func (self *cliGenerator) genCliHelp(fw *os.File, t *clitype) {
 	fw.WriteString("func " + t.call_help() + "() {\n\t")
+
+	fw.WriteString("fmt.Println(\"List of commands:\")\n\t")
+	for _, fn := range t.funcs {
+		fw.WriteString("fmt.Println(\"\\t"+fn.command)
+		for _, p := range fn.params {
+			fw.WriteString(" "+p.name+":<"+p.gotype+">")
+		}
+		fw.WriteString("\")\n\t")
+	}
+
+	fw.WriteString("fmt.Println(\"\")\n")
+
 	fw.WriteString("}\n\n")
 }
 
@@ -130,12 +142,20 @@ func (self *cliGenerator) genCliCallerFunc(fw *os.File, t *clitype, fn *clifuncs
 	fw.WriteString("func " + fn.call_name() + "(s_args []string) error {\n\t")
 	
 	for i, p := range fn.params {
-		if p.gotype != "string" {
-			parr = append(parr, fmt.Sprintf("p%d", i+1))
-			fw.WriteString(fmt.Sprintf("var p%d %s\n\t", i+1, p.gotype))
-			iserr = true
-		} else {
+		if p.gotype == "string" {
 			parr = append(parr, fmt.Sprintf("s_args[%d]", i))
+		} else {
+			iserr = true
+			switch p.gotype {
+			case "int8", "int16", "int32", "int64":
+				fw.WriteString(fmt.Sprintf("var p%d int64\n\t", i+1))
+			case "uint8", "uint16", "uint32", "uint64":
+				fw.WriteString(fmt.Sprintf("var p%d uint64\n\t", i+1))
+			case "float32", "float64":
+				fw.WriteString(fmt.Sprintf("var p%d float64\n\t", i+1))
+			case "bool":
+				fw.WriteString(fmt.Sprintf("var p%d bool\n\t", i+1))
+			}
 		}
 	}
 
@@ -153,17 +173,20 @@ func (self *cliGenerator) genCliCallerFunc(fw *os.File, t *clitype, fn *clifuncs
 
 	for i, p := range fn.params {
 		switch p.gotype {
-		//case "string": fw.WriteString(fmt.Sprintf("p%d = s_args[%d]\n\t", i+1, i))
 		case "int8", "int16", "int32", "int64":
+			parr = append(parr, fmt.Sprintf(p.gotype+"(p%d)", i+1))
 			fw.WriteString(fmt.Sprintf("p%d, err = strconv.ParseInt(s_args[%d], 10, %s)\n\t", i+1, i, strings.TrimPrefix(p.gotype, "int")))
 			fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
 		case "uint8", "uint16", "uint32", "uint64":
+			parr = append(parr, fmt.Sprintf(p.gotype+"(p%d)", i+1))
 			fw.WriteString(fmt.Sprintf("p%d, err = strconv.ParseUint(s_args[%d], 10, %s)\n\t", i+1, i, strings.TrimPrefix(p.gotype, "uint")))
 			fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
 		case "float32", "float64":
+			parr = append(parr, fmt.Sprintf(p.gotype+"(p%d)", i+1))
 			fw.WriteString(fmt.Sprintf("p%d, err = strconv.ParseFloat(s_args[%d], %s)\n\t", i+1, i, strings.TrimPrefix(p.gotype, "float")))
 			fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
 		case "bool":
+			parr = append(parr, fmt.Sprintf("p%d", i+1))
 			fw.WriteString(fmt.Sprintf("p%d, err = strconv.ParseBool(s_args[%d])\n\t", i+1, i))
 			fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
 		}
