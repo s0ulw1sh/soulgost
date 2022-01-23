@@ -38,8 +38,7 @@ type dbstruct struct {
 
 	dbcount   bool
 	dbload    bool
-	dbinsert  bool
-	dbupdate  bool
+	dbsave    bool
 	dbremove  bool
 }
 
@@ -144,8 +143,7 @@ func (self *dbGenerator) hasFuncs(root *ast.File, s *dbstruct) bool {
 
 		switch fd.Name.Name {
 		case "DbLoad":    s.dbload    = true
-		case "DbInsert":  s.dbinsert  = true
-		case "DbUpdate":  s.dbupdate  = true
+		case "DbSave":    s.dbsave    = true
 		case "DbRemove":  s.dbremove  = true
 		default:
 			continue
@@ -343,11 +341,11 @@ func (self *dbGenerator) genFnDbInsert(fw *os.File, s *dbstruct) {
 		if !f.ai {
 			fldarr = append(fldarr, "`" + f.name + "`")
 			qsarr  = append(qsarr, "?")
-			vsarr  = append(vsarr, "self." + f.goname)
+			vsarr  = append(vsarr, "item." + f.goname)
 		}
 	}
 
-	fw.WriteString("func (self *" + s.name + ") DbInsert(dbx *sql.DB) (int64, error) {\n\t")
+	fw.WriteString("func "+s.name+"DbInsert(dbx *sql.DB, item *"+s.name+") (int64, error) {\n\t")
 	fw.WriteString("res, err := dbx.Exec(\"INSERT `"+s.table+"` ("+strings.Join(fldarr, ",")+") ("+strings.Join(qsarr, ",")+")\", "+strings.Join(vsarr, ",")+")\n\t")
 	fw.WriteString("if err != nil {\n\t\t")
 	fw.WriteString("return 0, err\n\t")
@@ -356,7 +354,7 @@ func (self *dbGenerator) genFnDbInsert(fw *os.File, s *dbstruct) {
 	fw.WriteString("}\n\n")
 }
 
-func (self *dbGenerator) genFnDbUpdate(fw *os.File, s *dbstruct) {
+func (self *dbGenerator) genFnDbSave(fw *os.File, s *dbstruct) {
 	var (
 		fldarr []string
 		vsarr  []string
@@ -377,7 +375,7 @@ func (self *dbGenerator) genFnDbUpdate(fw *os.File, s *dbstruct) {
 		}
 	}
 
-	fw.WriteString("func (self *" + s.name + ") DbUpdate(dbx *sql.DB) (int64, error) {\n\t")
+	fw.WriteString("func (self *" + s.name + ") DbSave(dbx *sql.DB) (int64, error) {\n\t")
 	fw.WriteString("res, err := dbx.Exec(\"UPDATE `"+s.table+"` SET "+strings.Join(fldarr, ",")+" WHERE "+strings.Join(pkarr, " AND ")+"\", "+strings.Join(vsarr, ",")+", "+strings.Join(wharr, ",")+")\n\t")
 	fw.WriteString("if err != nil {\n\t\t")
 	fw.WriteString("return 0, err\n\t")
@@ -501,6 +499,62 @@ func (self *dbGenerator) genFnDbAll(fw *os.File, s *dbstruct) {
 	fw.WriteString("}\n\n")
 }
 
+func (self *dbGenerator) genFnDbLoadById(fw *os.File, s *dbstruct) {
+	var (
+		idsarr []string
+		selarr []string
+		scnarr []string
+		whrarr []string
+		whsarr []string
+	)
+
+	for _, f := range s.fields {
+		if f.xx { continue }
+
+		if f.pk {
+			idsarr = append(idsarr, f.name + "_v " + f.gotype)
+			whrarr = append(whrarr, "`" + f.name + "`=?")
+			whsarr = append(whsarr, f.name + "_v")
+		}
+		selarr = append(selarr, "`" + f.name + "`")
+		scnarr = append(scnarr, "&item." + f.goname)
+	}
+
+	fw.WriteString("func "+s.name+"DbLoadById(dbx *sql.DB, item *"+s.name+", "+strings.Join(idsarr, ", ")+") error {\n\t")
+	fw.WriteString("return dbx.QueryRow(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+"\", "+strings.Join(whsarr, ", ")+").Scan("+strings.Join(scnarr, ", ")+")\n")
+	fw.WriteString("}\n\n")
+}
+
+func (self *dbGenerator) genFnDbUpdate(fw *os.File, s *dbstruct) {
+	fw.WriteString("func "+s.name+"DbUpdate(dbx *sql.DB, flds_v map[string]interface{}, conds_v map[string]interface{}) (int64, error) {\n\t")
+	fw.WriteString("var (\n\t\t")
+	fw.WriteString("i int\n\t\t")
+	fw.WriteString("l int\n\t\t")
+	fw.WriteString("flds_s []string      = make([]string, len(flds_v))\n\t\t")
+	fw.WriteString("cnds_s []string      = make([]string, len(conds_v))\n\t\t")
+	fw.WriteString("vars_s []interface{} = make([]interface{}, len(flds_v) + len(conds_v))\n\t\t")
+	fw.WriteString(")\n\t")
+
+	fw.WriteString("i = 0\n\t")
+	fw.WriteString("for k, v := range flds_v {\n\t\t")
+	fw.WriteString("flds_s[i] = \"`\"+k+\"`=?\"\n\t\t")
+	fw.WriteString("vars_s[i] = v\n\t\t")
+	fw.WriteString("i += 1\n\t")
+	fw.WriteString("}\n\t")
+
+	fw.WriteString("i = 0\n\t")
+	fw.WriteString("l = len(flds_v)\n\t")
+	fw.WriteString("for k, v := range conds_v {\n\t\t")
+	fw.WriteString("cnds_s[i] = \"`\"+k+\"`=?\"\n\t\t")
+	fw.WriteString("vars_s[l + i] = v\n\t\t")
+	fw.WriteString("i += 1\n\t")
+	fw.WriteString("}\n\t")
+	fw.WriteString("res, err := self.Db.Exec(\"UPDATE `"+s.table+"` SET \"+strings.Join(flds_s, \", \")+\" WHERE \" + strings.Join(cnds_s, \" AND \"), vars_s...)\n\t")
+	fw.WriteString("if err != nil {\n\t\treturn 0, err\n\t}\n\t")
+	fw.WriteString("return res.RowsAffected()\n")
+	fw.WriteString("}\n\n")
+}
+
 func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
 	
 	if !s.prepare() { return }
@@ -508,7 +562,6 @@ func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
 	self.genPaginations(f, s)
 	self.genSubStructs(f, s)
 
-	
 	self.genFnDbCount(f, s)
 	self.genFnDbCountPk(f, s)
 
@@ -516,20 +569,19 @@ func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
 		self.genFnDbLoad(f, s)
 	}
 
-	if !s.dbinsert {
-		self.genFnDbInsert(f, s)
-	}
-
-	if !s.dbupdate {
-		self.genFnDbUpdate(f, s)
+	if !s.dbsave {
+		self.genFnDbSave(f, s)
 	}
 
 	if !s.dbremove {
 		self.genFnDbRemove(f, s)
 	}
 
+	self.genFnDbInsert(f, s)
 	self.genFnDbList(f, s)
 	self.genFnDbAll(f, s)
+	self.genFnDbLoadById(f, s)
+	self.genFnDbUpdate(f, s)
 }
 
 func Generate(root *ast.File, f *os.File) bool {
@@ -546,6 +598,7 @@ func Generate(root *ast.File, f *os.File) bool {
 	f.WriteString("// URL - https://github.com/s0ulw1sh/soulgost\n")
 	f.WriteString("// by Pavel Rid aka s0ulw1sh\n\n")
 	f.WriteString("import (\n")
+	f.WriteString("\t\"strings\"\n")
 	f.WriteString("\t\"database/sql\"\n")
 	f.WriteString("\t\"encoding/json\"\n")
 	f.WriteString(")\n\n")
