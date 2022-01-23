@@ -301,7 +301,7 @@ func (self *dbGenerator) genFnDbCountPk(fw *os.File, s *dbstruct) {
 	}
 }
 
-func (self *dbGenerator) genFnDbLoad(fw *os.File, s *dbstruct) {
+func (self *dbGenerator) genFnSelfDbLoad(fw *os.File, s *dbstruct) {
 	var (
 		idsarr []string
 		selarr []string
@@ -354,7 +354,7 @@ func (self *dbGenerator) genFnDbInsert(fw *os.File, s *dbstruct) {
 	fw.WriteString("}\n\n")
 }
 
-func (self *dbGenerator) genFnDbSave(fw *os.File, s *dbstruct) {
+func (self *dbGenerator) genFnSelfDbSave(fw *os.File, s *dbstruct) {
 	var (
 		fldarr []string
 		vsarr  []string
@@ -384,7 +384,7 @@ func (self *dbGenerator) genFnDbSave(fw *os.File, s *dbstruct) {
 	fw.WriteString("}\n\n")
 }
 
-func (self *dbGenerator) genFnDbRemove(fw *os.File, s *dbstruct) {
+func (self *dbGenerator) genFnSelfDbRemove(fw *os.File, s *dbstruct) {
 	var (
 		pkarr  []string
 		wharr  []string
@@ -555,6 +555,27 @@ func (self *dbGenerator) genFnDbUpdate(fw *os.File, s *dbstruct) {
 	fw.WriteString("}\n\n")
 }
 
+func (self *dbGenerator) genFnDbRemove(fw *os.File, s *dbstruct) {
+	fw.WriteString("func "+s.name+"DbRemove(dbx *sql.DB, conds_v map[string]interface{}) (int64, error) {\n\t")
+	fw.WriteString("var (\n\t\t")
+	fw.WriteString("i int = 0\n\t\t")
+	fw.WriteString("cnds_s []string      = make([]string, len(conds_v))\n\t\t")
+	fw.WriteString("vars_s []interface{} = make([]interface{}, len(conds_v))\n\t\t")
+	fw.WriteString(")\n\t")
+
+	fw.WriteString("for k, v := range conds_v {\n\t\t")
+	fw.WriteString("cnds_s[i] = \"`\"+k+\"`=?\"\n\t\t")
+	fw.WriteString("vars_s[i] = v\n\t\t")
+	fw.WriteString("i += 1\n\t")
+	fw.WriteString("}\n\t")
+
+	fw.WriteString("res, err := self.Db.Exec(\"DELETE FROM `"+s.table+"` WHERE \" + strings.Join(cnds_s, \" AND \"), vars_s...)\n\t")
+	fw.WriteString("if err != nil {\n\t\treturn 0, err\n\t}\n\t")
+	fw.WriteString("return res.RowsAffected()\n")
+	fw.WriteString("}\n\n")
+}
+
+
 func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
 	
 	if !s.prepare() { return }
@@ -566,15 +587,15 @@ func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
 	self.genFnDbCountPk(f, s)
 
 	if !s.dbload {
-		self.genFnDbLoad(f, s)
+		self.genFnSelfDbLoad(f, s)
 	}
 
 	if !s.dbsave {
-		self.genFnDbSave(f, s)
+		self.genFnSelfDbSave(f, s)
 	}
 
 	if !s.dbremove {
-		self.genFnDbRemove(f, s)
+		self.genFnSelfDbRemove(f, s)
 	}
 
 	self.genFnDbInsert(f, s)
@@ -582,6 +603,7 @@ func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
 	self.genFnDbAll(f, s)
 	self.genFnDbLoadById(f, s)
 	self.genFnDbUpdate(f, s)
+	self.genFnDbRemove(f, s)
 }
 
 func Generate(root *ast.File, f *os.File) bool {
