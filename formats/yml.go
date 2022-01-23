@@ -29,7 +29,7 @@ func (self *YmlOffer) IdHash() uint32 {
 	return hash.MurMur([]byte(self.Id))
 }
 
-func (self *TYmlOffer) FullName() string {
+func (self *YmlOffer) FullName() string {
 	if self.Name != "" {
 		return self.Name
 	}
@@ -41,14 +41,14 @@ func (self *TYmlOffer) FullName() string {
 	return ""
 }
 
-func (self *TYmlOffer) Prepare() bool {
+func (self *YmlOffer) Prepare() bool {
 	self.Id    = strings.TrimSpace(self.Id)
 	self.Price = strings.TrimSpace(self.Price)
 
 	return len(self.Id) > 0 && len(self.Price) > 0 && (len(self.Name) > 0 || len(self.Model) > 0)
 }
 
-func (self *TYmlOffer) CompositeHash() (hash string) {
+func (self *YmlOffer) CompositeHash() (hash string) {
 	hash += hash.CRC16Hex([]byte(self.Id))
 	hash += hash.CRC16Hex([]byte(self.Category))
 	hash += hash.CRC16Hex([]byte(self.FullName()))
