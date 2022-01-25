@@ -408,7 +408,7 @@ func (self *dbGenerator) genFnSelfDbRemove(fw *os.File, s *dbstruct) {
 	fw.WriteString("}\n\n")
 }
 
-func (self *dbGenerator) genFnDbList(fw *os.File, s *dbstruct) {
+func (self *dbGenerator) genFnDbSelect(fw *os.File, s *dbstruct) {
 	var (
 		selarr []string
 		scnarr []string
@@ -434,7 +434,7 @@ func (self *dbGenerator) genFnDbList(fw *os.File, s *dbstruct) {
 		scnarr = append(scnarr, "&s." + f.goname)
 	}
 
-	fw.WriteString("func "+s.name+"DbList(dbx *sql.DB, pagi_v *"+s.name+"DbPagi, list_v *"+s.name+"DbList) error {\n\t")
+	fw.WriteString("func "+s.name+"DbSelect(dbx *sql.DB, pagi_v *"+s.name+"DbPagi, list_v *"+s.name+"DbList) error {\n\t")
 
 	fw.WriteString("var s " + s.name + "\n\t")
 	fw.WriteString("list_v.Pagi = *pagi_v\n\t")
@@ -548,7 +548,7 @@ func (self *dbGenerator) genFnDbUpdate(fw *os.File, s *dbstruct) {
 
 	fw.WriteString("l = z\n\t")
 	fw.WriteString("for i, c := range conds_v {\n\t\t")
-	fw.WriteString("cnds_s[i] = c.Sqlexpr()\"\n\t\t")
+	fw.WriteString("cnds_s[i] = c.Sqlexpr()\n\t\t")
 	fw.WriteString("if v = c.Val(); v != nil {\n\t\t\t")
 	fw.WriteString("vars_s[l + i] = v\n\t\t\t")
 	fw.WriteString("z += 1\n\t\t")
@@ -607,7 +607,7 @@ func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
 	}
 
 	self.genFnDbInsert(f, s)
-	self.genFnDbList(f, s)
+	self.genFnDbSelect(f, s)
 	self.genFnDbAll(f, s)
 	self.genFnDbLoadById(f, s)
 	self.genFnDbUpdate(f, s)
