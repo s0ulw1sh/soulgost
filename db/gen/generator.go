@@ -17,6 +17,7 @@ type dbGenerator struct {
 
 type field struct {
 	pk     bool
+	uk     bool
 	fk     bool
 	ai     bool
 	nn     bool
@@ -68,6 +69,7 @@ func (self *dbstruct) prepare() bool {
 			switch tag {
 			case "ai": newfld.ai = true
 			case "nn": newfld.nn = true
+			case "uk": newfld.uk = true
 			case "pk":
 				newfld.pk = true
 				self.pkcount += 1
@@ -526,55 +528,61 @@ func (self *dbGenerator) genFnDbLoadById(fw *os.File, s *dbstruct) {
 }
 
 func (self *dbGenerator) genFnDbUpdate(fw *os.File, s *dbstruct) {
-	fw.WriteString("func "+s.name+"DbUpdate(dbx *sql.DB, flds_v map[string]interface{}, conds_v map[string]interface{}) (int64, error) {\n\t")
+	fw.WriteString("func "+s.name+"DbUpdate(dbx *sql.DB, flds_v []db.IField, conds_v []db.IField) (int64, error) {\n\t")
 	fw.WriteString("var (\n\t\t")
-	fw.WriteString("i int\n\t\t")
+	fw.WriteString("z int\n\t\t")
 	fw.WriteString("l int\n\t\t")
+	fw.WriteString("v interface{}\n\t\t")
 	fw.WriteString("flds_s []string      = make([]string, len(flds_v))\n\t\t")
 	fw.WriteString("cnds_s []string      = make([]string, len(conds_v))\n\t\t")
 	fw.WriteString("vars_s []interface{} = make([]interface{}, len(flds_v) + len(conds_v))\n\t\t")
 	fw.WriteString(")\n\t")
 
-	fw.WriteString("i = 0\n\t")
-	fw.WriteString("for k, v := range flds_v {\n\t\t")
-	fw.WriteString("flds_s[i] = \"`\"+k+\"`=?\"\n\t\t")
-	fw.WriteString("vars_s[i] = v\n\t\t")
-	fw.WriteString("i += 1\n\t")
+	fw.WriteString("for i, f := range flds_v {\n\t\t")
+	fw.WriteString("flds_s[i] = f.Sqlexpr()\n\t\t")
+	fw.WriteString("if v = f.Val(); v != nil {\n\t\t\t")
+	fw.WriteString("vars_s[i] = v\n\t\t\t")
+	fw.WriteString("z += 1\n\t\t")
+	fw.WriteString("}\n\t\t")
 	fw.WriteString("}\n\t")
 
-	fw.WriteString("i = 0\n\t")
-	fw.WriteString("l = len(flds_v)\n\t")
-	fw.WriteString("for k, v := range conds_v {\n\t\t")
-	fw.WriteString("cnds_s[i] = \"`\"+k+\"`=?\"\n\t\t")
-	fw.WriteString("vars_s[l + i] = v\n\t\t")
-	fw.WriteString("i += 1\n\t")
+	fw.WriteString("l = z\n\t")
+	fw.WriteString("for i, c := range conds_v {\n\t\t")
+	fw.WriteString("cnds_s[i] = c.Sqlexpr()\"\n\t\t")
+	fw.WriteString("if v = c.Val(); v != nil {\n\t\t\t")
+	fw.WriteString("vars_s[l + i] = v\n\t\t\t")
+	fw.WriteString("z += 1\n\t\t")
+	fw.WriteString("}\n\t\t")
 	fw.WriteString("}\n\t")
-	fw.WriteString("res, err := self.Db.Exec(\"UPDATE `"+s.table+"` SET \"+strings.Join(flds_s, \", \")+\" WHERE \" + strings.Join(cnds_s, \" AND \"), vars_s...)\n\t")
+
+	fw.WriteString("res, err := self.Db.Exec(\"UPDATE `"+s.table+"` SET \"+strings.Join(flds_s, \", \")+\" WHERE \" + strings.Join(cnds_s, \" AND \"), vars_s[:z]...)\n\t")
 	fw.WriteString("if err != nil {\n\t\treturn 0, err\n\t}\n\t")
 	fw.WriteString("return res.RowsAffected()\n")
 	fw.WriteString("}\n\n")
 }
 
 func (self *dbGenerator) genFnDbRemove(fw *os.File, s *dbstruct) {
-	fw.WriteString("func "+s.name+"DbRemove(dbx *sql.DB, conds_v map[string]interface{}) (int64, error) {\n\t")
+	fw.WriteString("func "+s.name+"DbRemove(dbx *sql.DB, conds_v []db.IField) (int64, error) {\n\t")
 	fw.WriteString("var (\n\t\t")
-	fw.WriteString("i int = 0\n\t\t")
+	fw.WriteString("v interface{}\n\t\t")
+	fw.WriteString("z int\n\t\t")
 	fw.WriteString("cnds_s []string      = make([]string, len(conds_v))\n\t\t")
 	fw.WriteString("vars_s []interface{} = make([]interface{}, len(conds_v))\n\t\t")
 	fw.WriteString(")\n\t")
 
-	fw.WriteString("for k, v := range conds_v {\n\t\t")
-	fw.WriteString("cnds_s[i] = \"`\"+k+\"`=?\"\n\t\t")
-	fw.WriteString("vars_s[i] = v\n\t\t")
-	fw.WriteString("i += 1\n\t")
+	fw.WriteString("for i, c := range conds_v {\n\t\t")
+	fw.WriteString("cnds_s[i] = c.Sqlexpr()\n\t\t")
+	fw.WriteString("if v = c.Val(); v != nil {\n\t\t\t")
+	fw.WriteString("vars_s[i] = v\n\t\t\t")
+	fw.WriteString("z += 1\n\t\t")
+	fw.WriteString("}\n\t\t")
 	fw.WriteString("}\n\t")
 
-	fw.WriteString("res, err := self.Db.Exec(\"DELETE FROM `"+s.table+"` WHERE \" + strings.Join(cnds_s, \" AND \"), vars_s...)\n\t")
+	fw.WriteString("res, err := self.Db.Exec(\"DELETE FROM `"+s.table+"` WHERE \" + strings.Join(cnds_s, \" AND \"), vars_s[:z]...)\n\t")
 	fw.WriteString("if err != nil {\n\t\treturn 0, err\n\t}\n\t")
 	fw.WriteString("return res.RowsAffected()\n")
 	fw.WriteString("}\n\n")
 }
-
 
 func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
 	
@@ -623,6 +631,7 @@ func Generate(root *ast.File, f *os.File) bool {
 	f.WriteString("\t\"strings\"\n")
 	f.WriteString("\t\"database/sql\"\n")
 	f.WriteString("\t\"encoding/json\"\n")
+	f.WriteString("\t\"github.com/s0ulw1sh/soulgost/db\"\n")
 	f.WriteString(")\n\n")
 
 	for _, s := range gen.structs {
