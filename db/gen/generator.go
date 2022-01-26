@@ -555,7 +555,7 @@ func (self *dbGenerator) genFnDbUpdate(fw *os.File, s *dbstruct) {
 	fw.WriteString("}\n\t\t")
 	fw.WriteString("}\n\t")
 
-	fw.WriteString("res, err := self.Db.Exec(\"UPDATE `"+s.table+"` SET \"+strings.Join(flds_s, \", \")+\" WHERE \" + strings.Join(cnds_s, \" AND \"), vars_s[:z]...)\n\t")
+	fw.WriteString("res, err := dbx.Exec(\"UPDATE `"+s.table+"` SET \"+strings.Join(flds_s, \", \")+\" WHERE \" + strings.Join(cnds_s, \" AND \"), vars_s[:z]...)\n\t")
 	fw.WriteString("if err != nil {\n\t\treturn 0, err\n\t}\n\t")
 	fw.WriteString("return res.RowsAffected()\n")
 	fw.WriteString("}\n\n")
@@ -578,7 +578,7 @@ func (self *dbGenerator) genFnDbRemove(fw *os.File, s *dbstruct) {
 	fw.WriteString("}\n\t\t")
 	fw.WriteString("}\n\t")
 
-	fw.WriteString("res, err := self.Db.Exec(\"DELETE FROM `"+s.table+"` WHERE \" + strings.Join(cnds_s, \" AND \"), vars_s[:z]...)\n\t")
+	fw.WriteString("res, err := dbx.Exec(\"DELETE FROM `"+s.table+"` WHERE \" + strings.Join(cnds_s, \" AND \"), vars_s[:z]...)\n\t")
 	fw.WriteString("if err != nil {\n\t\treturn 0, err\n\t}\n\t")
 	fw.WriteString("return res.RowsAffected()\n")
 	fw.WriteString("}\n\n")
