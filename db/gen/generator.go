@@ -479,23 +479,23 @@ func (self *dbGenerator) genFnDbAll(fw *os.File, s *dbstruct) {
 			whrarr = append(whrarr, "`" + f.name + "`=?")
 			whsarr = append(whsarr, "pagi_v." + f.goname)
 		}
-		
 
 		selarr = append(selarr, "`" + f.name + "`")
 		scnarr = append(scnarr, "&s." + f.goname)
 	}
 
-	fw.WriteString("func "+s.name+"DbAll(dbx *sql.DB, list_v []"+s.name+") error {\n\t")
+	fw.WriteString("func "+s.name+"DbAll(dbx *sql.DB, list_v *"+s.name+"DbList) error {\n\t")
 
 	fw.WriteString("var s " + s.name + "\n\t")
 
 	fw.WriteString("rows, err := dbx.Query(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "`\")\n\t")
 
 	fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
+	fw.WriteString("list_v.List = make([]"+s.name+", 0)\n\t")
 	fw.WriteString("defer rows.Close()\n\t")
 	fw.WriteString("for rows.Next() {\n\t\t")
 	fw.WriteString("if err = rows.Scan("+strings.Join(scnarr, ",")+"); err != nil {\n\t\t\treturn err\n\t\t}\n\t\t")
-	fw.WriteString("list_v = append(list_v, s)\n\t")
+	fw.WriteString("list_v.List = append(list_v.List, s)\n\t")
 	fw.WriteString("}\n\t")
 	fw.WriteString("return nil\n")
 	fw.WriteString("}\n\n")
@@ -584,6 +584,40 @@ func (self *dbGenerator) genFnDbRemove(fw *os.File, s *dbstruct) {
 	fw.WriteString("}\n\n")
 }
 
+func (self *dbGenerator) genFnDbUk(fw *os.File, s *dbstruct, fuk *field) {
+	var (
+		selarr []string
+		scnarr []string
+		whrarr []string
+		whsarr []string
+	)
+
+	whrarr = append(whrarr, "`" + fuk.name + "`=?")
+	whsarr = append(whsarr, fuk.name + "_v")
+
+	for _, f := range s.fields {
+		if f.xx { continue }
+
+		selarr = append(selarr, "`" + f.name + "`")
+		scnarr = append(scnarr, "&s." + f.goname)
+	}
+
+	fw.WriteString("func "+s.name+"DbAll"+fuk.goname+"(dbx *sql.DB, list_v *"+s.name+"DbList, "+fuk.name + "_v " + fuk.gotype+") error {\n\t")
+	
+	fw.WriteString("var s " + s.name + "\n\t")
+	fw.WriteString("rows, err := dbx.Query(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+"\", "+strings.Join(whsarr, ",")+")\n\t")
+	fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
+	fw.WriteString("list_v.List = make([]"+s.name+", 0)\n\t")
+	fw.WriteString("defer rows.Close()\n\t")
+	fw.WriteString("for rows.Next() {\n\t\t")
+	fw.WriteString("if err = rows.Scan("+strings.Join(scnarr, ",")+"); err != nil {\n\t\t\treturn err\n\t\t}\n\t\t")
+	fw.WriteString("list_v.List = append(list_v.List, s)\n\t")
+	fw.WriteString("}\n\t")
+	fw.WriteString("return nil\n")
+
+	fw.WriteString("}\n\n")
+}
+
 func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
 	
 	if !s.prepare() { return }
@@ -612,6 +646,12 @@ func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
 	self.genFnDbLoadById(f, s)
 	self.genFnDbUpdate(f, s)
 	self.genFnDbRemove(f, s)
+
+	for _, fuk := range s.fields {
+		if fuk.uk {
+			self.genFnDbUk(f, s, &fuk)
+		}
+	}
 }
 
 func Generate(root *ast.File, f *os.File) bool {
