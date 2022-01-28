@@ -205,6 +205,9 @@ func (self *dbGenerator) checkDecls(root *ast.File) bool {
 	return ret
 }
 
+// ===================================================
+// GENERATIONS
+// ===================================================
 
 func (self *dbGenerator) genPaginations(fw *os.File, s *dbstruct) {
 	var (
@@ -324,6 +327,10 @@ func (self *dbGenerator) genFnSelfDbLoad(fw *os.File, s *dbstruct) {
 		scnarr = append(scnarr, "&self." + f.goname)
 	}
 
+	if len(idsarr) == 0 {
+		return
+	}
+
 	fw.WriteString("func (self *" + s.name + ") DbLoad(dbx *sql.DB, "+strings.Join(idsarr, ", ")+") error {\n\t")
 	fw.WriteString("return dbx.QueryRow(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+"\", "+strings.Join(whsarr, ", ")+").Scan("+strings.Join(scnarr, ", ")+")\n")
 	fw.WriteString("}\n\n")
@@ -377,6 +384,10 @@ func (self *dbGenerator) genFnSelfDbSave(fw *os.File, s *dbstruct) {
 		}
 	}
 
+	if len(pkarr) == 0 {
+		return
+	}
+
 	fw.WriteString("func (self *" + s.name + ") DbSave(dbx *sql.DB) (int64, error) {\n\t")
 	fw.WriteString("res, err := dbx.Exec(\"UPDATE `"+s.table+"` SET "+strings.Join(fldarr, ",")+" WHERE "+strings.Join(pkarr, " AND ")+"\", "+strings.Join(vsarr, ",")+", "+strings.Join(wharr, ",")+")\n\t")
 	fw.WriteString("if err != nil {\n\t\t")
@@ -397,6 +408,10 @@ func (self *dbGenerator) genFnSelfDbRemove(fw *os.File, s *dbstruct) {
 			pkarr  = append(pkarr, "`" + f.name + "`=?")
 			wharr  = append(wharr, "self." + f.goname)
 		}
+	}
+
+	if len(pkarr) == 0 {
+		return
 	}
 
 	fw.WriteString("func (self *" + s.name + ") DbRemove(dbx *sql.DB) (int64, error) {\n\t")
@@ -520,6 +535,10 @@ func (self *dbGenerator) genFnDbLoadById(fw *os.File, s *dbstruct) {
 		}
 		selarr = append(selarr, "`" + f.name + "`")
 		scnarr = append(scnarr, "&item." + f.goname)
+	}
+
+	if len(idsarr) == 0 {
+		return
 	}
 
 	fw.WriteString("func "+s.name+"DbLoadById(dbx *sql.DB, item *"+s.name+", "+strings.Join(idsarr, ", ")+") error {\n\t")
