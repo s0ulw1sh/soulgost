@@ -54,7 +54,7 @@ func (self *dbstruct) prepare() bool {
 
 	for _, f := range self.stype.Fields.List {
 		if f.Tag == nil { continue }
-		if tag, ok = utils.TagLookup(f.Tag.Value, "sg"); !ok { continue }
+		if tag, ok = utils.TagLookup(f.Tag.Value[1:len(f.Tag.Value)-1], "sg"); !ok { continue }
 
 		tags = strings.Split(tag, ",")
 
