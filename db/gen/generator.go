@@ -1,7 +1,6 @@
 package gen
 
 import (
-	//"fmt"
 	"os"
 	"strings"
 	"strconv"
@@ -54,7 +53,14 @@ func (self *dbstruct) prepare() bool {
 
 	for _, f := range self.stype.Fields.List {
 		if f.Tag == nil { continue }
-		if tag, ok = utils.TagLookup(f.Tag.Value[1:len(f.Tag.Value)-1], "sg"); !ok { continue }
+
+		tagraw := f.Tag.Value
+
+		if tagraw[0] == '`' {
+			tagraw = tagraw[1:len(tagraw)-1]
+		}
+
+		if tag, ok = utils.TagLookup(tagraw, "sg"); !ok { continue }
 
 		tags = strings.Split(tag, ",")
 
@@ -174,7 +180,13 @@ func (self *dbGenerator) checkType(root *ast.File, decl *ast.GenDecl) bool {
 				continue
 			}
 
-			if _, ok := utils.TagLookup(f.Tag.Value, "sg"); ok {
+			tag := f.Tag.Value
+
+			if tag[0] == '`' {
+				tag = tag[1:len(tag)-1]
+			}
+
+			if _, ok := utils.TagLookup(tag, "sg"); ok {
 
 				self.structs = append(self.structs, dbstruct{
 					name:  ts.Name.Name,
