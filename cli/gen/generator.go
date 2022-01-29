@@ -78,7 +78,7 @@ func (self *cliGenerator) checkDecls(root *ast.File) bool {
 		if fd, ok = d.(*ast.FuncDecl); !ok || fd.Recv == nil || len(fd.Recv.List) != 1 { continue }
 		if se, ok = fd.Recv.List[0].Type.(*ast.StarExpr); !ok { continue }
 		if id, ok = se.X.(*ast.Ident); !ok { continue }
-		if len(fd.Type.Results.List) != 1 { continue }
+		if fd.Type.Results == nil || len(fd.Type.Results.List) != 1 { continue }
 		if rt, ok = fd.Type.Results.List[0].Type.(*ast.Ident); !ok || rt.Name != "error" { continue }
 		if !strings.HasPrefix(fd.Name.Name, "CliCmd") { continue }
 
@@ -148,7 +148,7 @@ func (self *cliGenerator) genCliCaller(fw *os.File, t *clitype) {
 	fw.WriteString(t.start_func() + "CliRun(s_args []string) error {\n\t")
 	fw.WriteString("if len(s_args) == 0 || s_args[0] == \"?\" {\n\t\t"+t.call_help()+"()\n\t\treturn nil\n\t}\n\t")
 
-	fw.WriteString("s_args_cmd := s_args[0]\n\t")
+	fw.WriteString("s_args_cmd := strings.ToLower(strings.Trim(s_args[0]))\n\t")
 	fw.WriteString("s_args = s_args[1:]\n\t")
 	fw.WriteString("switch hash.MurMur2([]byte(s_args_cmd)) {\n\t")
 	for _, fn := range t.funcs {
@@ -218,6 +218,7 @@ func Generate(root *ast.File, f *os.File) bool {
 	
 	f.WriteString("import (\n")
 	f.WriteString("\t\"fmt\"\n")
+	f.WriteString("\t\"strings\"\n")
 	f.WriteString("\t\"strconv\"\n")
 	f.WriteString("\t\"github.com/s0ulw1sh/soulgost/hash\"\n")
 	f.WriteString(")\n\n")
