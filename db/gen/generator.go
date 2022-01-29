@@ -470,7 +470,7 @@ func (self *dbGenerator) genFnDbSelect(fw *os.File, s *dbstruct) {
 		fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
 		fw.WriteString("rows, err := dbx.Query(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+" OFFSET ? LIMIT ?\", "+strings.Join(whsarr, ", ")+", pagi_v.Offset(), pagi_v.Limit())\n\t")
 	} else {
-		fw.WriteString("err := dbx.QueryRow(\"SELECT COUNT("+pksarr+") FROM `\").Scan(&list_v.Pagi.Count)\n\t")
+		fw.WriteString("err := dbx.QueryRow(\"SELECT COUNT("+pksarr+") FROM `" + s.table + "`\").Scan(&list_v.Pagi.Count)\n\t")
 		fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
 		fw.WriteString("rows, err := dbx.Query(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` OFFSET ? LIMIT ?\", pagi_v.Offset(), pagi_v.Limit())\n\t")
 	}
