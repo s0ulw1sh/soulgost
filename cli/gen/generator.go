@@ -166,10 +166,10 @@ func (self *cliGenerator) genCliCaller(fw *os.File, t *clitype) {
 			} else {
 				iserr = true
 				switch p.gotype {
-				case "int8", "int16", "int32", "int64":
+				case "int8", "int16", "int32", "int64", "int":
 					fw.WriteString(fmt.Sprintf("p%d, err := strconv.ParseInt(s_args[%d], 10, %s)\n\t\t", i+1, i, strings.TrimPrefix(p.gotype, "int")))
 					parr = append(parr, fmt.Sprintf(p.gotype+"(p%d)", i+1))
-				case "uint8", "uint16", "uint32", "uint64":
+				case "uint8", "uint16", "uint32", "uint64", "uint":
 					fw.WriteString(fmt.Sprintf("p%d, err := strconv.ParseUint(s_args[%d], 10, %s)\n\t\t", i+1, i, strings.TrimPrefix(p.gotype, "uint")))
 					parr = append(parr, fmt.Sprintf(p.gotype+"(p%d)", i+1))
 				case "float32", "float64":
