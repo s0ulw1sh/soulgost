@@ -148,7 +148,7 @@ func (self *cliGenerator) genCliCaller(fw *os.File, t *clitype) {
 	fw.WriteString(t.start_func() + "CliRun(s_args []string) error {\n\t")
 	fw.WriteString("if len(s_args) == 0 || s_args[0] == \"?\" {\n\t\t"+t.call_help()+"()\n\t\treturn nil\n\t}\n\t")
 
-	fw.WriteString("s_args_cmd := strings.ToLower(strings.Trim(s_args[0]))\n\t")
+	fw.WriteString("s_args_cmd := strings.ToLower(strings.TrimSpace(s_args[0]))\n\t")
 	fw.WriteString("s_args = s_args[1:]\n\t")
 	fw.WriteString("switch hash.MurMur2([]byte(s_args_cmd)) {\n\t")
 	for _, fn := range t.funcs {
@@ -166,10 +166,16 @@ func (self *cliGenerator) genCliCaller(fw *os.File, t *clitype) {
 			} else {
 				iserr = true
 				switch p.gotype {
-				case "int8", "int16", "int32", "int64", "int":
+				case "int":
+					fw.WriteString(fmt.Sprintf("p%d, err := strconv.ParseInt(s_args[%d], 10, 32)\n\t\t", i+1, i))
+					parr = append(parr, fmt.Sprintf(p.gotype+"(p%d)", i+1))
+				case "int8", "int16", "int32", "int64":
 					fw.WriteString(fmt.Sprintf("p%d, err := strconv.ParseInt(s_args[%d], 10, %s)\n\t\t", i+1, i, strings.TrimPrefix(p.gotype, "int")))
 					parr = append(parr, fmt.Sprintf(p.gotype+"(p%d)", i+1))
-				case "uint8", "uint16", "uint32", "uint64", "uint":
+				case "uint":
+					fw.WriteString(fmt.Sprintf("p%d, err := strconv.ParseUint(s_args[%d], 10, 32)\n\t\t", i+1, i))
+					parr = append(parr, fmt.Sprintf(p.gotype+"(p%d)", i+1))
+				case "uint8", "uint16", "uint32", "uint64":
 					fw.WriteString(fmt.Sprintf("p%d, err := strconv.ParseUint(s_args[%d], 10, %s)\n\t\t", i+1, i, strings.TrimPrefix(p.gotype, "uint")))
 					parr = append(parr, fmt.Sprintf(p.gotype+"(p%d)", i+1))
 				case "float32", "float64":
