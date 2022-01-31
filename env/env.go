@@ -29,7 +29,7 @@ func GetEnvUint8(name string, defval uint8) uint8 {
 	val, err := strconv.ParseUint(env, 10, 8)
 
 	if err != nil {
-		log.Fatalf("invalid environment variable value %s=%d, value must be a uint16", name, val)
+		log.Fatalf("invalid environment variable %s=%s, value must be a uint8", name, env)
 		return defval
 	}
 
@@ -46,7 +46,7 @@ func GetEnvUint16(name string, defval uint16) uint16 {
 	val, err := strconv.ParseUint(env, 10, 16)
 
 	if err != nil {
-		log.Fatalf("invalid environment variable value %s=%d, value must be a uint16", name, val)
+		log.Fatalf("invalid environment variable %s=%s, value must be a uint16", name, env)
 		return defval
 	}
 
@@ -63,11 +63,28 @@ func GetEnvInt(name string, defval int) int {
 	val, err := strconv.ParseInt(env, 10, 32)
 
 	if err != nil {
-		log.Fatalf("invalid environment variable value %s=%d, value must be a int", name, val)
+		log.Fatalf("invalid environment variable %s=%s, value must be a int", name, env)
 		return defval
 	}
 
 	return int(val)
+}
+
+func GetEnvUint(name string, defval uint) uint {
+	env := os.Getenv(name)
+	
+	if env == "" {
+		return defval
+	}
+
+	val, err := strconv.ParseUint(env, 10, 32)
+
+	if err != nil {
+		log.Fatalf("invalid environment variable %s=%s, value must be a uint", name, env)
+		return defval
+	}
+
+	return uint(val)
 }
 
 func GetEnvBool(name string, defval bool) bool {
@@ -79,8 +96,8 @@ func GetEnvBool(name string, defval bool) bool {
 
 	b, err := strconv.ParseBool(env)
 
-	if env == "" {
-		log.Fatalf("invalid environment variable value %s=%d, value must be a boolean", name, val)
+	if err != nil {
+		log.Fatalf("invalid environment variable %s=%s, value must be a boolean", name, env)
 		return defval
 	}
 
