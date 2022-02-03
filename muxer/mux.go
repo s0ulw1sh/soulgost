@@ -9,9 +9,11 @@ import (
 type Mux struct {
 	isinit bool
 	items map[uint32]http.Handler
+	fallback http.Handler
 }
 
 func (self *Mux) Handle(pattern string, handler http.Handler) {
+	var h uint32 = 0
 
 	if !self.isinit {
 		self.isinit  = true
@@ -22,8 +24,8 @@ func (self *Mux) Handle(pattern string, handler http.Handler) {
 
 	p := pattern[1:]
 
-	if len(p) == 0 {
-		self.items[0] = handler
+	if p == "*" {
+		self.fallback = handler
 		return
 	}
 
@@ -34,25 +36,18 @@ func (self *Mux) Handle(pattern string, handler http.Handler) {
 		}
 	}
 
-	h := hash.MurMur2([]byte(p))
+	if len(p) > 0 {
+		h = hash.MurMur2([]byte(p))
+	}
 
 	self.items[h] = handler
 }
 
 func (self *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var h uint32 = 0
 	if len(r.URL.Path) == 0 || r.URL.Path[0] != '/' { return }
 
 	p := r.URL.Path[1:]
-
-	if len(p) == 0 {
-		if s, ok := self.items[0]; ok {
-			s.ServeHTTP(w, r)
-			return
-		} else {
-			http.NotFound(w, r)
-			return
-		}
-	}
 
 	for i, c := range p {
 		if c == '/' && i > 0 {
@@ -61,10 +56,17 @@ func (self *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h := hash.MurMur2([]byte(p))
+	if len(p) != 0 {
+		h = hash.MurMur2([]byte(p))
+	}
 
 	if s, ok := self.items[h]; ok {
 		s.ServeHTTP(w, r)
+		return
+	}
+
+	if self.fallback != nil {
+		self.fallback.ServeHTTP(w, r)
 		return
 	}
 
