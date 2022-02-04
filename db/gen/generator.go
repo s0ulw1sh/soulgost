@@ -262,7 +262,10 @@ fw.WriteString(`func (self *`+pgnmn+`) Offset() int {
 }` + "\n\n")
 
 fw.WriteString(`func (self *`+pgnmn+`) MarshalJSON() ([]byte, error) {
-	return json.Marshal(self)
+	self.Pages  = self.Count / self.Max
+	if self.Pages == 0 { self.Pages = 1 }
+	if self.Page  == 0 { self.Page  = 1 }
+	return json.Marshal(*self)
 }` + "\n\n")
 
 }
@@ -468,11 +471,11 @@ func (self *dbGenerator) genFnDbSelect(fw *os.File, s *dbstruct) {
 	if len(whrarr) > 0 {
 		fw.WriteString("err := dbx.QueryRow(\"SELECT COUNT("+pksarr+") FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+"\", "+strings.Join(whsarr, ", ")+").Scan(&list_v.Pagi.Count)\n\t")
 		fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
-		fw.WriteString("rows, err := dbx.Query(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+" OFFSET ? LIMIT ?\", "+strings.Join(whsarr, ", ")+", pagi_v.Offset(), pagi_v.Limit())\n\t")
+		fw.WriteString("rows, err := dbx.Query(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+" LIMIT ? OFFSET ? \", "+strings.Join(whsarr, ", ")+", pagi_v.Limit(), pagi_v.Offset())\n\t")
 	} else {
 		fw.WriteString("err := dbx.QueryRow(\"SELECT COUNT("+pksarr+") FROM `" + s.table + "`\").Scan(&list_v.Pagi.Count)\n\t")
 		fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
-		fw.WriteString("rows, err := dbx.Query(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` OFFSET ? LIMIT ?\", pagi_v.Offset(), pagi_v.Limit())\n\t")
+		fw.WriteString("rows, err := dbx.Query(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` LIMIT ? OFFSET ?\", pagi_v.Limit(), pagi_v.Offset())\n\t")
 	}
 
 	fw.WriteString("if err != nil {\n\t\treturn err\n\t}\n\t")
