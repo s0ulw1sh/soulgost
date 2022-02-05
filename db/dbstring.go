@@ -40,3 +40,33 @@ func (s *StrNull) Val() string {
 		return ""
 	}
 }
+
+type StrEmpty struct {
+	sql.NullString
+}
+
+func (s *StrEmpty) MarshalJSON() ([]byte, error) {
+	if !s.Valid {
+		return []byte("\"-\""), nil
+	}
+	return json.Marshal(s.String)
+}
+
+func (s *StrEmpty) UnmarshalJSON(b []byte) error {
+	err := json.Unmarshal(b, &s.String)
+	s.Valid = (err == nil)
+	return err
+}
+
+func (s *StrEmpty) Set(val string) {
+	s.Valid  = val != ""
+	s.String = val
+}
+
+func (s *StrEmpty) Val() string {
+	if s.Valid {
+		return s.String
+	} else {
+		return ""
+	}
+}
