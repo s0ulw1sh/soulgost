@@ -24,3 +24,14 @@ func TestTimeMinScanString(t *testing.T) {
 		t.Error("Not equal time", mintime, eqtime)
 	}
 }
+
+func TestTimeEmptyScanString(t *testing.T) {
+	test := "2038-01-19 03:14:07"
+	timeval := TimeEmpty{}
+	timeval.Scan(test)
+	res := timeval.String()
+
+	if res != test {
+		t.Error("Not equal time", test, res)
+	}
+}
