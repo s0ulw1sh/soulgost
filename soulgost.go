@@ -14,11 +14,13 @@ import (
 
 	db_gen  "github.com/s0ulw1sh/soulgost/db/gen"
 	cli_gen "github.com/s0ulw1sh/soulgost/cli/gen"
+	api_gen "github.com/s0ulw1sh/soulgost/api/gen"
 )
 
 type appSoulgost struct {
 	dbGen    bool
 	cliGen   bool
+	apiGen   bool
 	argPath  string
 	fset     *token.FileSet
 }
@@ -70,6 +72,7 @@ func (self *appSoulgost) flagParse() {
 		switch strings.ToLower(m) {
 		case "db":  self.dbGen  = true
 		case "cli": self.cliGen = true
+		case "api": self.apiGen = true
 		}
 	}
 }
@@ -155,6 +158,22 @@ func (self *appSoulgost) processFile(file_path string) {
 
 		if cli_gen.Generate(astf, f) {
 			err = self.moveFile(f.Name(), filepath.Join(fdir, fname + "_sgcli.go"))
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
+
+	if self.apiGen {
+		f, err := os.CreateTemp("", "soulgost-api")
+		defer os.Remove(f.Name())
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if api_gen.Generate(astf, f) {
+			err = self.moveFile(f.Name(), filepath.Join(fdir, fname + "_sgapi.go"))
 			if err != nil {
 				log.Fatal(err)
 			}
