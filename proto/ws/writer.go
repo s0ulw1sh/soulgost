@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"net"
 	"encoding/binary"
 )
 
@@ -72,6 +73,7 @@ func (w *Writer) errmsg(err error) error {
 }
 
 func (w *Writer) flush(final bool, extra []byte) error {
+	var err error
 
 	ln := w.pos - maxFrameHeaderSize + len(extra)
 
@@ -113,18 +115,19 @@ func (w *Writer) flush(final bool, extra []byte) error {
 		}
 	}
 
-	_, err := w.c.conn.Write(w.buf[fpos:w.pos])
+	if len(extra) > 0 {
+		b := net.Buffers([][]byte{
+			w.buf[fpos:w.pos],
+			extra,
+		})
+
+		_, err = b.WriteTo(w.c.conn)
+	} else {
+		_, err = w.c.conn.Write(w.buf[fpos:w.pos])
+	}
 
 	if err != nil {
 		return w.errmsg(err)
-	}
-
-	if len(extra) > 0 {
-		_, err := w.c.conn.Write(extra)
-
-		if err != nil {
-			return w.errmsg(err)
-		}
 	}
 
 	if final {
