@@ -158,13 +158,13 @@ func (self *apiGenerator) genApiCaller(fw *os.File, t *apitype) {
 			fw.WriteString("if err = self.ApiMiddleware(method, req, res); err != nil { return res.WriteResult(nil, err) }\n\t\t")
 		}
 
-		fw.WriteString("if err = req.Params(&par_in); err != nil { return res.WriteResult(nil, err) }\n\t\t")
+		fw.WriteString("if err = req.GetParams(&par_in); err != nil { return res.WriteResult(nil, err) }\n\t\t")
 		fw.WriteString("if err = self." + fn.name + "(req, &par_in, &par_out); err != nil { return res.WriteResult(nil, err) }\n\t\t")
 		fw.WriteString("return res.WriteResult(&par_out, nil)\n\t")
 	}
 
 	fw.WriteString("default:\n\t\t")
-	fw.WriteString("return res.WriteResult(nil, \"method not found\")\n\t")
+	fw.WriteString("return res.WriteResult(nil, api.ErrParams)\n\t")
 	fw.WriteString("}\n\t")
 	
 	fw.WriteString("return nil\n")

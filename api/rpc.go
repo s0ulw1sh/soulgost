@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"encoding/json"
 	"github.com/s0ulw1sh/soulgost/proto/ws"
-	"github.com/s0ulw1sh/soulgost/utils"
 	"github.com/s0ulw1sh/soulgost/hash"
 )
 
@@ -36,7 +35,7 @@ func (self *RpcRequest) Ctx(c context.Context) context.Context {
 	return self.ctx
 }
 
-func (self *RpcRequest) Params(v interface{}) error {
+func (self *RpcRequest) GetParams(v interface{}) error {
 	if len(self.Params) != 1 {
 		return ErrRpcParams
 	}
@@ -118,7 +117,7 @@ func (self *Rpc) ServeWs(w http.ResponseWriter, r *http.Request, apireq *RpcRequ
 
 	defer conn.Close()
 
-	if (self.ConnCb) {
+	if (self.ConnCb != nil) {
 		self.ConnCb(apireq)
 	}
 
@@ -132,13 +131,13 @@ func (self *Rpc) ServeWs(w http.ResponseWriter, r *http.Request, apireq *RpcRequ
 		switch reader.Type {
 		case ws.TextMessage:
 			conn.NextWriter(ws.TextMessage, &writer)
-			self.ServeRpc(apireq, &reader, &writer)
+			self.ServeRpc(apireq, &writer, &reader)
 			writer.Close()
 		}
 
 	}
 
-	if (self.DisconnCb) {
+	if (self.DisconnCb != nil) {
 		self.DisconnCb(apireq)
 	}
 }
@@ -159,15 +158,15 @@ func (self *Rpc) ServeRpc(req *RpcRequest, w io.Writer, r io.Reader) {
 	servmet := strings.Split(req.Method, ".")
 
 	if len(servmet) != 2 {
-		res.WriteResult(nil, "method not found")
+		res.WriteResult(nil, ErrParams)
 		return
 	}
 
 	h := hash.MurMur2([]byte(strings.ToLower(servmet[0])))
 
 	if apir, ok := apis[h]; ok {
-		apir.CallApi(strings.ToLower(servmet[1]), req, res)
+		apir.CallApi(strings.ToLower(servmet[1]), req, &res)
 	} else {
-		res.WriteResult(nil, "method not found")
+		res.WriteResult(nil, ErrParams)
 	}
 }

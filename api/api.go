@@ -1,14 +1,16 @@
 package api
 
 import (
-	"io"
 	"context"
+	"errors"
 	"strings"
 	"github.com/s0ulw1sh/soulgost/hash"
 )
 
 var (
 	apis = make(map[uint32]ApiType)
+
+	ErrParams = errors.New("method not found")
 )
 
 func Register(name string, apist ApiType) {
@@ -20,11 +22,11 @@ type ApiType interface {
 	CallApi(string, Request, Response)
 }
 
-type Request struct {
+type Request interface {
 	Ctx(context.Context) context.Context
-	Params(interface{}) error
+	GetParams(interface{}) error
 }
 
-type Response struct {
+type Response interface {
 	WriteResult(interface{}, error) error
 }
