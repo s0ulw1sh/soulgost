@@ -164,7 +164,7 @@ func (self *apiGenerator) genApiCaller(fw *os.File, t *apitype) {
 	}
 
 	fw.WriteString("default:\n\t\t")
-	fw.WriteString("return res.WriteResult(nil, api.ErrParams)\n\t")
+	fw.WriteString("return res.WriteResult(nil, api.ErrMethodNotFound)\n\t")
 	fw.WriteString("}\n\t")
 	
 	fw.WriteString("return nil\n")

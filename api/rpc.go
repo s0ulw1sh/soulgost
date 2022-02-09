@@ -158,7 +158,7 @@ func (self *Rpc) ServeRpc(req *RpcRequest, w io.Writer, r io.Reader) {
 	servmet := strings.Split(req.Method, ".")
 
 	if len(servmet) != 2 {
-		res.WriteResult(nil, ErrParams)
+		res.WriteResult(nil, ErrMethodNotFound)
 		return
 	}
 
@@ -167,6 +167,6 @@ func (self *Rpc) ServeRpc(req *RpcRequest, w io.Writer, r io.Reader) {
 	if apir, ok := apis[h]; ok {
 		apir.CallApi(strings.ToLower(servmet[1]), req, &res)
 	} else {
-		res.WriteResult(nil, ErrParams)
+		res.WriteResult(nil, ErrMethodNotFound)
 	}
 }

@@ -10,7 +10,7 @@ import (
 var (
 	apis = make(map[uint32]ApiType)
 
-	ErrParams = errors.New("method not found")
+	ErrMethodNotFound = errors.New("method not found")
 )
 
 func Register(name string, apist ApiType) {
