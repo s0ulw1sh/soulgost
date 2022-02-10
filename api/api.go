@@ -19,7 +19,7 @@ func Register(name string, apist ApiType) {
 }
 
 type ApiType interface {
-	CallApi(string, Request, Response)
+	CallApi(string, Request, Response) error
 }
 
 type Request interface {
