@@ -65,41 +65,33 @@ func (self *RpcResponse) WriteResult(v interface{}, err error) error {
 	return json.NewEncoder(self.w).Encode(*self)
 }
 
-type RpcOnAuthCb     = func(*http.Request, Request) error
-type RpcOnConnect    = func(Request)
-type RpcOnDisconnect = func(Request)
+type RpcOnBefore       = func(*http.Request, Request) error
+type RpcOnWsConnect    = func(Request) error
+type RpcOnWsDisconnect = func(Request) error
 
 type Rpc struct {
-	AuthCb    RpcOnAuthCb
-	ConnCb    RpcOnConnect
-	DisconnCb RpcOnDisconnect
-}
-
-func (self *Rpc) Auth(w http.ResponseWriter, r *http.Request, apireq Request) error {
-	if self.AuthCb != nil {
-		return self.AuthCb(r, apireq)
-	}
-	return nil
+	BeforeCb    RpcOnBefore
+	ConnWsCb    RpcOnWsConnect
+	DisconnWsCb RpcOnWsDisconnect
 }
 
 func (self *Rpc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var rpcreq RpcRequest
 
 	rpcreq.Ctx(r.Context())
-	
-	if err := self.Auth(w, r, &rpcreq); err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
+
+	if self.BeforeCb != nil {
+		if err := self.BeforeCb(r, &rpcreq); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+		}
 	}
 
 	if strings.HasSuffix(r.URL.Path, "/ws") {
 		self.ServeWs(w, r, &rpcreq)
-		return
+	} else {
+		self.ServeRpc(&rpcreq, w, r.Body)
+		r.Body.Close()
 	}
-
-	self.ServeRpc(&rpcreq, w, r.Body)
-
-	r.Body.Close()
 }
 
 func (self *Rpc) ServeWs(w http.ResponseWriter, r *http.Request, apireq *RpcRequest) {
@@ -117,8 +109,11 @@ func (self *Rpc) ServeWs(w http.ResponseWriter, r *http.Request, apireq *RpcRequ
 
 	defer conn.Close()
 
-	if (self.ConnCb != nil) {
-		self.ConnCb(apireq)
+	if (self.ConnWsCb != nil) {
+		if err = self.ConnWsCb(apireq); err != nil {
+			// TODO send error
+			return
+		}
 	}
 
 	for {
@@ -137,8 +132,8 @@ func (self *Rpc) ServeWs(w http.ResponseWriter, r *http.Request, apireq *RpcRequ
 
 	}
 
-	if (self.DisconnCb != nil) {
-		self.DisconnCb(apireq)
+	if (self.DisconnWsCb != nil) {
+		self.DisconnWsCb(apireq)
 	}
 }
 
