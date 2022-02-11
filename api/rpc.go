@@ -2,6 +2,7 @@ package api
 
 import (
 	"io"
+	"bytes"
 	"errors"
 	"strings"
 	"context"
@@ -164,4 +165,48 @@ func (self *Rpc) ServeRpc(req *RpcRequest, w io.Writer, r io.Reader) {
 	} else {
 		res.WriteResult(nil, ErrMethodNotFound)
 	}
+}
+
+func (self *Rpc) Call(ctx context.Context, serv, meth string, in interface{}, out interface{}) error {
+	var req RpcRequest
+	var res RpcResponse
+	
+	req.Ctx(ctx)
+
+	rawreq := struct {
+		Id      int64            `json:"id"`
+		JsonRpc string           `json:"jsonrpc"`
+		Method  string           `json:"method"`
+		Params  []interface{}    `json:"params"`
+	} { 1, "2.0", serv + "." + meth, []interface{}{in} }
+
+	bytesrpc, err := json.Marshal(rawreq)
+
+	if err != nil {
+		return err
+	}
+
+	inbuf  := bytes.NewBuffer(bytesrpc)
+	outbuf := bytes.Buffer{}
+
+	self.ServeRpc(&req, io.Writer(&outbuf), inbuf)
+
+	res.Result = out
+
+	err = json.Unmarshal(outbuf.Bytes(), &res)
+
+	if err != nil {
+		return err
+	}
+
+	if res.Error != nil {
+		est, ok := res.Error.(string)
+		if ok {
+			return errors.New(est)
+		}
+
+		return errors.New("unknown error")
+	}
+
+	return nil
 }
