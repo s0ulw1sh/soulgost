@@ -59,10 +59,9 @@ func (c *Conn) NextReader(msg *Reader) error {
 	msg.c  = c
 
 	for err == nil {
-		e := c.nextFrame(msg)
+		err = c.nextFrame(msg)
 		
 		if err != nil {
-			err = e
 			break
 		}
 
