@@ -330,7 +330,7 @@ func (n *I64Zero) Val() int64 {
 	return n.Var
 }
 
-func (n *I64Zero) MarshalJSON() ([]byte, error) {
+func (n I64Zero) MarshalJSON() ([]byte, error) {
 	return json.Marshal(n.Var)
 }
 
