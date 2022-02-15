@@ -195,6 +195,17 @@ func (n *I16Zero) Val() int16 {
 	return n.Var
 }
 
+func (n *I16Zero) MarshalJSON() ([]byte, error) {
+	return json.Marshal(n.Var)
+}
+
+func (n *I16Zero) UnmarshalJSON(b []byte) (err error) {
+	if err = json.Unmarshal(b, &n.Var); err != nil {
+		n.Var = 0
+	}
+	return
+}
+
 type I32Zero struct {
 	Var int32
 }
@@ -251,6 +262,18 @@ func (n *I32Zero) Val() int32 {
 	return n.Var
 }
 
+func (n *I32Zero) MarshalJSON() ([]byte, error) {
+	return json.Marshal(n.Var)
+}
+
+func (n *I32Zero) UnmarshalJSON(b []byte) (err error) {
+	if err = json.Unmarshal(b, &n.Var); err != nil {
+		n.Var = 0
+	}
+	return
+}
+
+
 type I64Zero struct {
 	Var int64
 }
@@ -305,4 +328,15 @@ func (n *I64Zero) Set(val int64) {
 
 func (n *I64Zero) Val() int64 {
 	return n.Var
+}
+
+func (n *I64Zero) MarshalJSON() ([]byte, error) {
+	return json.Marshal(n.Var)
+}
+
+func (n *I64Zero) UnmarshalJSON(b []byte) (err error) {
+	if err = json.Unmarshal(b, &n.Var); err != nil {
+		n.Var = 0
+	}
+	return
 }
