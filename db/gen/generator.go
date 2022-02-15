@@ -370,7 +370,7 @@ func (self *dbGenerator) genFnDbInsert(fw *os.File, s *dbstruct) {
 	}
 
 	fw.WriteString("func "+s.name+"DbInsert(dbx *sql.DB, item *"+s.name+") (int64, error) {\n\t")
-	fw.WriteString("res, err := dbx.Exec(\"INSERT `"+s.table+"` ("+strings.Join(fldarr, ",")+") ("+strings.Join(qsarr, ",")+")\", "+strings.Join(vsarr, ",")+")\n\t")
+	fw.WriteString("res, err := dbx.Exec(\"INSERT INTO `"+s.table+"` ("+strings.Join(fldarr, ",")+") VALUES ("+strings.Join(qsarr, ",")+")\", "+strings.Join(vsarr, ",")+")\n\t")
 	fw.WriteString("if err != nil {\n\t\t")
 	fw.WriteString("return 0, err\n\t")
 	fw.WriteString("}\n\t")
