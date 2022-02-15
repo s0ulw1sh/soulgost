@@ -9,7 +9,7 @@ type F64Null struct {
 	sql.NullFloat64
 }
 
-func (f *F64Null) MarshalJSON() ([]byte, error) {
+func (f F64Null) MarshalJSON() ([]byte, error) {
 	if !f.Valid {
 		return []byte("null"), nil
 	}

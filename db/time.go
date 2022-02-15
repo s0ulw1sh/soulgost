@@ -52,7 +52,7 @@ func (d *TimeMin) Scan(value interface{}) error {
     return nil
 }
 
-func (d *TimeMin) MarshalJSON() ([]byte, error) {
+func (d TimeMin) MarshalJSON() ([]byte, error) {
     return json.Marshal(d.Minutes)
 }
 
@@ -144,7 +144,7 @@ func (t TimeEmpty) String() string {
     return string(buf[:])
 }
 
-func (t *TimeEmpty) MarshalJSON() ([]byte, error) {
+func (t TimeEmpty) MarshalJSON() ([]byte, error) {
     var (
         buf [16]byte
         w   int

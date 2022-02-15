@@ -12,7 +12,7 @@ type I32Null struct {
 	sql.NullInt32
 }
 
-func (n *I32Null) MarshalJSON() ([]byte, error) {
+func (n I32Null) MarshalJSON() ([]byte, error) {
 	if !n.Valid {
 		return []byte("null"), nil
 	}
@@ -44,7 +44,7 @@ type I64Null struct {
 	sql.NullInt64
 }
 
-func (n *I64Null) MarshalJSON() ([]byte, error) {
+func (n I64Null) MarshalJSON() ([]byte, error) {
 	if !n.Valid {
 		return []byte("null"), nil
 	}
@@ -120,7 +120,7 @@ func (n *I8Zero) Scan(value interface{}) error {
 	return nil
 }
 
-func (n *I8Zero) MarshalJSON() ([]byte, error) {
+func (n I8Zero) MarshalJSON() ([]byte, error) {
 	return json.Marshal(n.Int8)
 }
 
@@ -195,7 +195,7 @@ func (n *I16Zero) Val() int16 {
 	return n.Var
 }
 
-func (n *I16Zero) MarshalJSON() ([]byte, error) {
+func (n I16Zero) MarshalJSON() ([]byte, error) {
 	return json.Marshal(n.Var)
 }
 
@@ -262,7 +262,7 @@ func (n *I32Zero) Val() int32 {
 	return n.Var
 }
 
-func (n *I32Zero) MarshalJSON() ([]byte, error) {
+func (n I32Zero) MarshalJSON() ([]byte, error) {
 	return json.Marshal(n.Var)
 }
 
