@@ -106,6 +106,12 @@ func (self *apiGenerator) checkDecls(root *ast.File) bool {
 						}
 					case *ast.Ident:
 						tname = x.Name
+					case *ast.ArrayType:
+
+						if elt, ok := x.Elt.(*ast.Ident); ok {
+							tname = "[]" + elt.Name
+						}
+
 					}
 				}
 
