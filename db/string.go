@@ -15,6 +15,13 @@ func StrNullNew(str string) StrNull {
 	return s
 }
 
+func (s StrNull) String() string {
+	if !s.Valid {
+		return ""
+	}
+	return s.String
+}
+
 func (s StrNull) MarshalJSON() ([]byte, error) {
 	if !s.Valid {
 		return []byte("null"), nil
@@ -43,6 +50,13 @@ func (s *StrNull) Val() string {
 
 type StrEmpty struct {
 	sql.NullString
+}
+
+func (s StrEmpty) String() string {
+	if !s.Valid {
+		return "-"
+	}
+	return s.String
 }
 
 func (s StrEmpty) MarshalJSON() ([]byte, error) {
