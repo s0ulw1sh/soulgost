@@ -241,7 +241,7 @@ func (self *dbGenerator) genPaginations(fw *os.File, s *dbstruct) {
 
 	fw.WriteString("type " + pgnmn + " struct {\n\t")
 	fw.WriteString(strings.Join(pgarr, "\n\t") + "\n\t")
-	fw.WriteString("Count int `json:\"count,omitempty\"`\n\t")
+	fw.WriteString("Count db.I64Zero `json:\"count,omitempty\"`\n\t")
 	fw.WriteString("Max   int `json:\"max,omitempty\"`\n\t")
 	fw.WriteString("Page  int `json:\"page,omitempty\"`\n\t")
 	fw.WriteString("Pages int `json:\"pages,omitempty\"`\n")
@@ -646,6 +646,7 @@ func Generate(root *ast.File, f *os.File) bool {
 	f.WriteString("import (\n")
 	f.WriteString("\t\"database/sql\"\n")
 	f.WriteString("\t\"encoding/json\"\n")
+	f.WriteString("\t\"github.com/s0ulw1sh/soulgost/db\"\n")
 	f.WriteString(")\n\n")
 
 	for _, s := range gen.structs {
