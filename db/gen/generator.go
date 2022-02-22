@@ -263,7 +263,7 @@ fw.WriteString(`func (self *`+pgnmn+`) Offset() int {
 
 fw.WriteString(`func (self *`+pgnmn+`) MarshalJSON() ([]byte, error) {
 	if self.Max == 0 { self.Max = `+pgcnt+` }
-	self.Pages  = self.Count / self.Max
+	self.Pages  = int(self.Count.Val()) / self.Max
 	if self.Pages == 0 { self.Pages = 1 }
 	if self.Page  == 0 { self.Page  = 1 }
 	return json.Marshal(*self)
