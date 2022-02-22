@@ -644,10 +644,8 @@ func Generate(root *ast.File, f *os.File) bool {
 	f.WriteString("// URL - https://github.com/s0ulw1sh/soulgost\n")
 	f.WriteString("// by Pavel Rid aka s0ulw1sh\n\n")
 	f.WriteString("import (\n")
-	f.WriteString("\t\"strings\"\n")
 	f.WriteString("\t\"database/sql\"\n")
 	f.WriteString("\t\"encoding/json\"\n")
-	f.WriteString("\t\"github.com/s0ulw1sh/soulgost/db\"\n")
 	f.WriteString(")\n\n")
 
 	for _, s := range gen.structs {
