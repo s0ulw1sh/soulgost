@@ -284,7 +284,7 @@ func (self *dbGenerator) genFnDbCount(fw *os.File, s *dbstruct) {
 		fw.WriteString("err = dbx.QueryRow(\"SELECT COUNT(*) FROM `" + s.table + "`\").Scan(&c)\n")
 	} else {
 		for _, f := range s.fields {
-			if f.pk {
+			if f.pk || f.ai {
 				fw.WriteString("err = dbx.QueryRow(\"SELECT COUNT(`"+f.name+"`) FROM `" + s.table + "`\").Scan(&c)\n")
 				break
 			}
@@ -301,10 +301,14 @@ func (self *dbGenerator) genFnDbCountPk(fw *os.File, s *dbstruct) {
 		whrarr []string
 		whsarr []string
 		pkname string
+		pkflds int
 	)
+
+	pkflds = 0
 
 	for _, f := range s.fields {
 		if f.pk {
+			if !f.ai { pkflds += 1 }
 			if len(pkname) == 0 {
 				pkname = "`" + f.name + "`"
 			}
@@ -312,6 +316,10 @@ func (self *dbGenerator) genFnDbCountPk(fw *os.File, s *dbstruct) {
 			whrarr = append(whrarr, "`" + f.name + "`=?")
 			whsarr = append(whsarr, f.name + "_v")
 		}
+	}
+
+	if pkflds == 0 {
+		return
 	}
 
 	if len(idsarr) > 0 {
@@ -322,7 +330,7 @@ func (self *dbGenerator) genFnDbCountPk(fw *os.File, s *dbstruct) {
 	}
 }
 
-func (self *dbGenerator) genFnSelfDbLoad(fw *os.File, s *dbstruct) {
+func (self *dbGenerator) genFnSelfDbLoadById(fw *os.File, s *dbstruct) {
 	var (
 		idsarr []string
 		selarr []string
@@ -334,7 +342,7 @@ func (self *dbGenerator) genFnSelfDbLoad(fw *os.File, s *dbstruct) {
 	for _, f := range s.fields {
 		if f.xx { continue }
 
-		if f.pk {
+		if f.ai {
 			idsarr = append(idsarr, f.name + "_v " + f.gotype)
 			whrarr = append(whrarr, "`" + f.name + "`=?")
 			whsarr = append(whsarr, f.name + "_v")
@@ -348,6 +356,40 @@ func (self *dbGenerator) genFnSelfDbLoad(fw *os.File, s *dbstruct) {
 	}
 
 	fw.WriteString("func (self *" + s.name + ") DbLoad(dbx *sql.DB, "+strings.Join(idsarr, ", ")+") error {\n\t")
+	fw.WriteString("return dbx.QueryRow(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+"\", "+strings.Join(whsarr, ", ")+").Scan("+strings.Join(scnarr, ", ")+")\n")
+	fw.WriteString("}\n\n")
+}
+
+func (self *dbGenerator) genFnSelfDbLoadByPk(fw *os.File, s *dbstruct) {
+	var (
+		idsarr []string
+		selarr []string
+		scnarr []string
+		whrarr []string
+		whsarr []string
+		pkflds int
+	)
+
+	pkflds = 0
+
+	for _, f := range s.fields {
+		if f.xx { continue }
+
+		if f.pk {
+			if !f.ai { pkflds += 1 }
+			idsarr = append(idsarr, f.name + "_v " + f.gotype)
+			whrarr = append(whrarr, "`" + f.name + "`=?")
+			whsarr = append(whsarr, f.name + "_v")
+		}
+		selarr = append(selarr, "`" + f.name + "`")
+		scnarr = append(scnarr, "&self." + f.goname)
+	}
+
+	if pkflds == 0 {
+		return
+	}
+
+	fw.WriteString("func (self *" + s.name + ") DbLoadByPk(dbx *sql.DB, "+strings.Join(idsarr, ", ")+") error {\n\t")
 	fw.WriteString("return dbx.QueryRow(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+"\", "+strings.Join(whsarr, ", ")+").Scan("+strings.Join(scnarr, ", ")+")\n")
 	fw.WriteString("}\n\n")
 }
@@ -379,7 +421,7 @@ func (self *dbGenerator) genFnDbInsert(fw *os.File, s *dbstruct) {
 	fw.WriteString("}\n\n")
 }
 
-func (self *dbGenerator) genFnSelfDbSave(fw *os.File, s *dbstruct) {
+func (self *dbGenerator) genFnSelfDbSaveById(fw *os.File, s *dbstruct) {
 	var (
 		fldarr []string
 		vsarr  []string
@@ -390,11 +432,11 @@ func (self *dbGenerator) genFnSelfDbSave(fw *os.File, s *dbstruct) {
 	for _, f := range s.fields {
 		if f.xx || f.xw { continue }
 
-		if !f.ai && !f.pk {
+		if !f.ai {
 			fldarr = append(fldarr, "`" + f.name + "`=?")
 			vsarr  = append(vsarr, "self." + f.goname)
 		}
-		if f.pk {
+		if f.ai {
 			pkarr  = append(pkarr, "`" + f.name + "`=?")
 			wharr  = append(wharr, "self." + f.goname)
 		}
@@ -413,24 +455,92 @@ func (self *dbGenerator) genFnSelfDbSave(fw *os.File, s *dbstruct) {
 	fw.WriteString("}\n\n")
 }
 
-func (self *dbGenerator) genFnSelfDbRemove(fw *os.File, s *dbstruct) {
+func (self *dbGenerator) genFnSelfDbSaveByPk(fw *os.File, s *dbstruct) {
 	var (
+		fldarr []string
+		vsarr  []string
 		pkarr  []string
 		wharr  []string
+		pkflds int
 	)
 
+	pkflds = 0
+
 	for _, f := range s.fields {
+		if f.xx || f.xw { continue }
+
+		if !f.pk && !f.ai {
+			fldarr = append(fldarr, "`" + f.name + "`=?")
+			vsarr  = append(vsarr, "self." + f.goname)
+		}
 		if f.pk {
+			if !f.ai { pkflds += 1 }
 			pkarr  = append(pkarr, "`" + f.name + "`=?")
 			wharr  = append(wharr, "self." + f.goname)
 		}
 	}
 
-	if len(pkarr) == 0 {
+	if pkflds == 0 {
+		return
+	}
+
+	fw.WriteString("func (self *" + s.name + ") DbSaveByPk(dbx *sql.DB) (int64, error) {\n\t")
+	fw.WriteString("res, err := dbx.Exec(\"UPDATE `"+s.table+"` SET "+strings.Join(fldarr, ",")+" WHERE "+strings.Join(pkarr, " AND ")+"\", "+strings.Join(vsarr, ",")+", "+strings.Join(wharr, ",")+")\n\t")
+	fw.WriteString("if err != nil {\n\t\t")
+	fw.WriteString("return 0, err\n\t")
+	fw.WriteString("}\n\t")
+	fw.WriteString("return res.RowsAffected()\n")
+	fw.WriteString("}\n\n")
+}
+
+func (self *dbGenerator) genFnSelfDbRemoveById(fw *os.File, s *dbstruct) {
+	var (
+		aiarr  []string
+		wharr  []string
+	)
+
+	for _, f := range s.fields {
+		if f.ai {
+			aiarr  = append(aiarr, "`" + f.name + "`=?")
+			wharr  = append(wharr, "self." + f.goname)
+		}
+	}
+
+	if len(aiarr) != 1 {
 		return
 	}
 
 	fw.WriteString("func (self *" + s.name + ") DbRemove(dbx *sql.DB) (int64, error) {\n\t")
+	fw.WriteString("res, err := dbx.Exec(\"DELETE FROM `"+s.table+"` WHERE "+strings.Join(aiarr, " AND ")+"\", "+strings.Join(wharr, ",")+")\n\t")
+	fw.WriteString("if err != nil {\n\t\t")
+	fw.WriteString("return 0, err\n\t")
+	fw.WriteString("}\n\t")
+	fw.WriteString("return res.RowsAffected()\n")
+	fw.WriteString("}\n\n")
+}
+
+func (self *dbGenerator) genFnSelfDbRemoveByPk(fw *os.File, s *dbstruct) {
+	var (
+		pkarr  []string
+		wharr  []string
+		pkflds int
+	)
+
+	pkflds = 0
+
+	for _, f := range s.fields {
+		if f.pk {
+			if !f.ai { pkflds += 1 }
+			pkarr  = append(pkarr, "`" + f.name + "`=?")
+			wharr  = append(wharr, "self." + f.goname)
+		}
+	}
+
+	if pkflds == 0 {
+		return
+	}
+
+	fw.WriteString("func (self *" + s.name + ") DbRemoveByPk(dbx *sql.DB) (int64, error) {\n\t")
 	fw.WriteString("res, err := dbx.Exec(\"DELETE FROM `"+s.table+"` WHERE "+strings.Join(pkarr, " AND ")+"\", "+strings.Join(wharr, ",")+")\n\t")
 	fw.WriteString("if err != nil {\n\t\t")
 	fw.WriteString("return 0, err\n\t")
@@ -544,7 +654,7 @@ func (self *dbGenerator) genFnDbLoadById(fw *os.File, s *dbstruct) {
 	for _, f := range s.fields {
 		if f.xx { continue }
 
-		if f.pk {
+		if f.ai {
 			idsarr = append(idsarr, f.name + "_v " + f.gotype)
 			whrarr = append(whrarr, "`" + f.name + "`=?")
 			whsarr = append(whsarr, f.name + "_v")
@@ -553,11 +663,46 @@ func (self *dbGenerator) genFnDbLoadById(fw *os.File, s *dbstruct) {
 		scnarr = append(scnarr, "&item." + f.goname)
 	}
 
-	if len(idsarr) == 0 {
+	if len(idsarr) != 1 {
 		return
 	}
 
 	fw.WriteString("func "+s.name+"DbLoadById(dbx *sql.DB, item *"+s.name+", "+strings.Join(idsarr, ", ")+") error {\n\t")
+	fw.WriteString("return dbx.QueryRow(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+"\", "+strings.Join(whsarr, ", ")+").Scan("+strings.Join(scnarr, ", ")+")\n")
+	fw.WriteString("}\n\n")
+}
+
+func (self *dbGenerator) genFnDbLoadByPk(fw *os.File, s *dbstruct) {
+	var (
+		idsarr []string
+		selarr []string
+		scnarr []string
+		whrarr []string
+		whsarr []string
+		pkflds int
+	)
+
+	pkflds = 0
+
+	for _, f := range s.fields {
+		if f.xx { continue }
+
+		if f.pk {
+			if !f.ai { pkflds += 1 }
+			idsarr = append(idsarr, f.name + "_v " + f.gotype)
+			whrarr = append(whrarr, "`" + f.name + "`=?")
+			whsarr = append(whsarr, f.name + "_v")
+		}
+
+		selarr = append(selarr, "`" + f.name + "`")
+		scnarr = append(scnarr, "&item." + f.goname)
+	}
+
+	if pkflds == 0 {
+		return
+	}
+
+	fw.WriteString("func "+s.name+"DbLoadByPk(dbx *sql.DB, item *"+s.name+", "+strings.Join(idsarr, ", ")+") error {\n\t")
 	fw.WriteString("return dbx.QueryRow(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+"\", "+strings.Join(whsarr, ", ")+").Scan("+strings.Join(scnarr, ", ")+")\n")
 	fw.WriteString("}\n\n")
 }
@@ -607,21 +752,25 @@ func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
 	self.genFnDbCountPk(f, s)
 
 	if !s.dbload {
-		self.genFnSelfDbLoad(f, s)
+		self.genFnSelfDbLoadById(f, s)
+		self.genFnSelfDbLoadByPk(f, s)
 	}
 
 	if !s.dbsave {
-		self.genFnSelfDbSave(f, s)
+		self.genFnSelfDbSaveById(f, s)
+		self.genFnSelfDbSaveByPk(f, s)
 	}
 
 	if !s.dbremove {
-		self.genFnSelfDbRemove(f, s)
+		self.genFnSelfDbRemoveById(f, s)
+		self.genFnSelfDbRemoveByPk(f, s)
 	}
 
 	self.genFnDbInsert(f, s)
 	self.genFnDbSelect(f, s)
 	self.genFnDbAll(f, s)
 	self.genFnDbLoadById(f, s)
+	self.genFnDbLoadByPk(f, s)
 
 	for _, fuk := range s.fields {
 		if fuk.uk {
