@@ -26,6 +26,8 @@ type field struct {
 	name   string
 	goname string
 	gotype string
+	insexp string
+	updexp string
 }
 
 type dbstruct struct {
@@ -69,6 +71,8 @@ func (self *dbstruct) prepare() bool {
 		newfld := field{
 			name:   tags[0],
 			goname: f.Names[0].Name,
+			insexp: "?",
+			updexp: "?",
 		}
 
 		for _, tag := range tags[1:] {
@@ -83,6 +87,13 @@ func (self *dbstruct) prepare() bool {
 			case "xx": newfld.xx = true
 			case "xw": newfld.xw = true
 			case "pg": newfld.pg = true
+			default:
+				if strings.HasPrefix(tag, "INS(") {
+					newfld.insexp = tag[4:len(tag)-1]
+				}
+				if strings.HasPrefix(tag, "UPD(") {
+					newfld.updexp = tag[4:len(tag)-1]
+				}
 			}
 		}
 
@@ -407,7 +418,7 @@ func (self *dbGenerator) genFnDbInsert(fw *os.File, s *dbstruct) {
 
 		if !f.ai {
 			fldarr = append(fldarr, "`" + f.name + "`")
-			qsarr  = append(qsarr, "?")
+			qsarr  = append(qsarr, f.insexp)
 			vsarr  = append(vsarr, "item." + f.goname)
 		}
 	}
@@ -433,11 +444,11 @@ func (self *dbGenerator) genFnSelfDbSaveById(fw *os.File, s *dbstruct) {
 		if f.xx || f.xw { continue }
 
 		if !f.ai {
-			fldarr = append(fldarr, "`" + f.name + "`=?")
+			fldarr = append(fldarr, "`" + f.name + "`="+f.updexp)
 			vsarr  = append(vsarr, "self." + f.goname)
 		}
 		if f.ai {
-			pkarr  = append(pkarr, "`" + f.name + "`=?")
+			pkarr  = append(pkarr, "`" + f.name + "`="+f.updexp)
 			wharr  = append(wharr, "self." + f.goname)
 		}
 	}
@@ -561,15 +572,14 @@ func (self *dbGenerator) genFnDbSelect(fw *os.File, s *dbstruct) {
 	for _, f := range s.fields {
 		if f.xx { continue }
 
-		if f.pk && len(pksarr) == 1 {
+		if (f.ai || f.pk) && len(pksarr) == 1 {
 			pksarr = "`" + f.name + "`"
 		}
 
-		if f.pg {
+		if f.pg && !f.ai {
 			whrarr = append(whrarr, "`" + f.name + "`=?")
 			whsarr = append(whsarr, "pagi_v." + f.goname)
 		}
-		
 
 		selarr = append(selarr, "`" + f.name + "`")
 		scnarr = append(scnarr, "&s." + f.goname)
