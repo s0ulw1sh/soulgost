@@ -17,7 +17,7 @@ var ruEnDictExt = map[string]string{
 	"Ь": "", "ь": "", "Э": "E", "э": "e", "Ю": "Iu", "ю": "iu", "Я": "Ia", "я": "ia",
 }
 
-func isRuChar(r rune) bool {
+func IsRuChar(r rune) bool {
 	return (r >= 1040 && r <= 1103) || r == 1105 || r == 1025
 }
 
@@ -35,7 +35,7 @@ func Ru2En(text string) string {
 	for {
 		if r, _, err = input.ReadRune(); err != nil {
 			break
-		} else if !isRuChar(r) {
+		} else if !IsRuChar(r) {
 			output.WriteRune(r)
 			continue
 		}
