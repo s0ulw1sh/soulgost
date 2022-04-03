@@ -16,19 +16,13 @@ func Sanitize(text string) string {
 			break
 		}
 
-		if r >= 33 && r <= 47 {
-			continue
-		} else if r >= 58 && r <= 64 {
-			continue
-		} else if r >= 91 && r <= 96 {
-			continue
-		} else if r >= 123 && r <= 126 {
-			continue
-		} else if r >= 8 && r <= 10 {
-			continue
+		switch {
+		case IsRuRune(r):  fallthrough
+		case IsEnRune(r):  fallthrough
+		case IsDigitRune(r): fallthrough
+		case r == 32:
+			output.WriteRune(r)
 		}
-
-		output.WriteRune(r)
 	}
 
 	return output.String()
