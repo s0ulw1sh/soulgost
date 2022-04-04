@@ -45,7 +45,7 @@ func SanitizeWithSpace(text string) string {
 		switch {
 		case IsRuRune(r):  fallthrough
 		case IsEnRune(r):  fallthrough
-		case IsDigitRune(r): fallthrough
+		case IsDigitRune(r):
 			output.WriteRune(r)
 		}
 	}
