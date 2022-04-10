@@ -2,7 +2,7 @@ package hash
 
 import "testing"
 
-/*func TestMurMur2(t *testing.T) {
+func TestMurMur2(t *testing.T) {
 	data := []byte("HelloWorld")
 	hash := MurMur2(data)
 	eq   := uint32(147875502)
@@ -10,7 +10,7 @@ import "testing"
 	if hash != eq {
 		t.Error("Not equal hashes", hash, eq)
 	}
-}*/
+}
 
 func TestMurMur2Part(t *testing.T) {
 	data1 := []byte("Hello")
