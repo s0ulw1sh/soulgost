@@ -95,3 +95,16 @@ func MurMur2(data []byte) uint32 {
 
 	return h.Finish()
 }
+
+func MurMur2MixTrail(items []uint32) uint32 {
+	var h MurMur2Hash
+	if len(items) == 0 { return 0 }
+
+	h.Init(items[0])
+
+	for _, u := range items[1:] {
+		h.hash, _ = h.mix(h.hash, u)
+	}
+
+	return h.Finish()
+}
