@@ -23,6 +23,7 @@ type field struct {
 	pg     bool
 	xx     bool
 	xw     bool
+	xu     bool
 	name   string
 	goname string
 	gotype string
@@ -86,6 +87,7 @@ func (self *dbstruct) prepare() bool {
 			case "fk": newfld.fk = true
 			case "xx": newfld.xx = true
 			case "xw": newfld.xw = true
+			case "xu": newfld.xu = true
 			case "pg": newfld.pg = true
 			default:
 				if strings.HasPrefix(tag, "INS(") {
@@ -441,7 +443,7 @@ func (self *dbGenerator) genFnSelfDbSaveById(fw *os.File, s *dbstruct) {
 	)
 
 	for _, f := range s.fields {
-		if f.xx || f.xw { continue }
+		if f.xx || f.xw || f.xu { continue }
 
 		if !f.ai {
 			fldarr = append(fldarr, "`" + f.name + "`="+f.updexp)
@@ -478,7 +480,7 @@ func (self *dbGenerator) genFnSelfDbSaveByPk(fw *os.File, s *dbstruct) {
 	pkflds = 0
 
 	for _, f := range s.fields {
-		if f.xx || f.xw { continue }
+		if f.xx || f.xw || f.xu { continue }
 
 		if !f.pk && !f.ai {
 			fldarr = append(fldarr, "`" + f.name + "`=?")
