@@ -373,6 +373,34 @@ func (self *dbGenerator) genFnSelfDbLoadById(fw *os.File, s *dbstruct) {
 	fw.WriteString("}\n\n")
 }
 
+func (self *dbGenerator) genFnSelfDbLoadByIdRaw(fw *os.File, s *dbstruct) {
+	var (
+		idsarr []string
+		selarr []string
+		scnarr []string
+		whrarr []string
+		whsarr []string
+	)
+
+	for _, f := range s.fields {
+		if f.ai {
+			idsarr = append(idsarr, f.name + "_v " + f.gotype)
+			whrarr = append(whrarr, "`" + f.name + "`=?")
+			whsarr = append(whsarr, f.name + "_v")
+		}
+		selarr = append(selarr, "`" + f.name + "`")
+		scnarr = append(scnarr, "&self." + f.goname)
+	}
+
+	if len(idsarr) == 0 {
+		return
+	}
+
+	fw.WriteString("func (self *" + s.name + ") DbLoadRaw(dbx *sql.DB, "+strings.Join(idsarr, ", ")+") error {\n\t")
+	fw.WriteString("return dbx.QueryRow(\"SELECT "+strings.Join(selarr, ",")+" FROM `" + s.table + "` WHERE "+strings.Join(whrarr, " AND ")+"\", "+strings.Join(whsarr, ", ")+").Scan("+strings.Join(scnarr, ", ")+")\n")
+	fw.WriteString("}\n\n")
+}
+
 func (self *dbGenerator) genFnSelfDbLoadByPk(fw *os.File, s *dbstruct) {
 	var (
 		idsarr []string
@@ -765,6 +793,7 @@ func (self *dbGenerator) genStruct(f *os.File, s *dbstruct) {
 
 	if !s.dbload {
 		self.genFnSelfDbLoadById(f, s)
+		self.genFnSelfDbLoadByIdRaw(f, s)
 		self.genFnSelfDbLoadByPk(f, s)
 	}
 
